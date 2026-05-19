@@ -1,1 +1,14 @@
+companion object {
+    val providers = listOf(
+        AnyMovieProvider, //adultos
+        TvProvider, //CANALES
+        PelisplustoProvider, //PELICULAS
+        FlixLatamProvider, // series y pelis 2
 
+        LaMovieProvider,
+        LaCartoonsProvider,
+        //DoramasflixProvider,
+        ClaroProvider,  // Claro TV - Argentina y Paraguay
+// este es digital tv normal funcional
+    )
+}
