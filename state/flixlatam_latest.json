@@ -1,8 +1,13 @@
 {
-  "processed_episodes": {},
+  "processed_episodes": {
+    "-TlRuyz:t1:e7": true,
+    "-TlRuyz:t1:e8": true,
+    "margo-tiene-problemas-de-diner-0R2avd:t1:e8": true,
+    "the-boys:t5:e8": true
+  },
   "processed_movies": {},
   "processed_series": {
     "from": true
   },
-  "updated_at": "2026-05-20T03:00:02Z"
+  "updated_at": "2026-05-20T23:50:46Z"
 }
