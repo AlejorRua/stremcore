@@ -1,0 +1,66 @@
+name: Actualizar catalogo FlixLatam
+
+on:
+  schedule:
+    # Una vez al dia, a las 03:17 UTC.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-flixlatam-catalog
+  cancel-in-progress: false
+
+jobs:
+  update-catalog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      FLIX_MONITOR_EXPORT_ROOT: ${{ github.workspace }}
+      FLIX_MONITOR_GIT_BRANCH: ${{ github.event.repository.default_branch }}
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Configurar Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: scraper/go.mod
+          cache-dependency-path: scraper/go.sum
+
+      - name: Compilar monitor
+        working-directory: scraper
+        run: go build -trimpath -o "$RUNNER_TEMP/flixlatam-monitor" .
+
+      - name: Detectar novedades sin modificar
+        run: |
+          "$RUNNER_TEMP/flixlatam-monitor" update-json --root "$GITHUB_WORKSPACE" --dry-run
+
+      - name: Actualizar archivos JSON
+        run: |
+          "$RUNNER_TEMP/flixlatam-monitor" update-json --root "$GITHUB_WORKSPACE"
+
+      - name: Regenerar paginas, busqueda y metadatos
+        run: |
+          python3 doc/rebuild_catalog_indexes.py
+          python3 doc/generate_search_index.py
+
+      - name: Configurar autor de los commits
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Publicar cambios
+        run: |
+          git add -A -- movies series pages search meta.json state
+          if git diff --cached --quiet; then
+            echo "No hay cambios para publicar"
+            exit 0
+          fi
+          git commit -m "update latest flixlatam content"
+          git push origin "HEAD:$FLIX_MONITOR_GIT_BRANCH"

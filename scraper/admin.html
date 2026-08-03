@@ -1,0 +1,1288 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin — PoseidonHD2</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+<style>
+body{background:#0f1117;color:#e2e8f0}
+.navbar{background:#1a1d2e!important}
+.card,.modal-content{background:#1e2235;border:1px solid #2d3748;color:#e2e8f0}
+.table{--bs-table-bg:transparent;--bs-table-color:#e2e8f0;--bs-table-hover-bg:rgba(255,255,255,.04)}
+.table thead th{background:#252a3d;color:#94a3b8;font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;border-color:#2d3748}
+.table td{border-color:#2d3748;vertical-align:middle}
+.form-control,.form-select{background:#252a3d;border-color:#3d4a5c;color:#e2e8f0}
+.form-control:focus,.form-select:focus{background:#252a3d;border-color:#6366f1;color:#e2e8f0;box-shadow:0 0 0 .2rem rgba(99,102,241,.25)}
+.form-control::placeholder{color:#64748b}
+.nav-tabs .nav-link{color:#94a3b8;border:none;padding:.6rem 1.2rem}
+.nav-tabs .nav-link.active{background:#252a3d;color:#e2e8f0;border-bottom:2px solid #6366f1}
+.nav-tabs{border-bottom:1px solid #2d3748}
+.badge-server{font-size:.7rem;padding:.25em .5em}
+.poster-thumb{width:38px;height:56px;object-fit:cover;border-radius:4px}
+.poster-placeholder{width:38px;height:56px;background:#252a3d;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#4a5568;font-size:.7rem}
+.btn-icon{padding:.2rem .45rem;font-size:.8rem}
+.server-row{background:#252a3d;border-radius:6px;padding:.5rem .75rem;margin-bottom:.4rem}
+.server-row .form-control,.server-row .form-select{background:#1e2235;font-size:.82rem;padding:.25rem .5rem}
+.breadcrumb{background:transparent;margin:0}
+.breadcrumb-item+.breadcrumb-item::before{color:#64748b}
+.breadcrumb-item a{color:#6366f1;text-decoration:none;cursor:pointer}
+.breadcrumb-item.active{color:#94a3b8}
+.episode-item{background:#252a3d;border-radius:6px;padding:.5rem .75rem;margin-bottom:.35rem;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+.episode-item:hover{background:#2d3748}
+.season-btn{background:#252a3d;border:1px solid #3d4a5c;border-radius:6px;padding:.5rem .75rem;margin-bottom:.35rem;cursor:pointer;width:100%;text-align:left;color:#e2e8f0}
+.season-btn:hover{background:#2d3748}
+.conflict-row td{font-size:.85rem}
+.toast-container{position:fixed;top:1rem;right:1rem;z-index:9999}
+#loadingOverlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:8000;display:none;align-items:center;justify-content:center}
+.spinner-ring{width:50px;height:50px;border:4px solid #3d4a5c;border-top-color:#6366f1;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.pagination .page-link{background:#1e2235;border-color:#2d3748;color:#94a3b8}
+.pagination .page-link:hover{background:#252a3d;color:#e2e8f0}
+.pagination .page-item.active .page-link{background:#6366f1;border-color:#6366f1;color:#fff}
+.pagination .page-item.disabled .page-link{background:#1a1d2e;color:#4a5568}
+textarea.form-control{min-height:160px;font-family:monospace;font-size:.8rem}
+</style>
+</head>
+<body>
+
+<div id="loadingOverlay"><div class="spinner-ring"></div></div>
+
+<nav class="navbar navbar-dark px-3 py-2 mb-3">
+  <span class="navbar-brand fw-bold"><i class="bi bi-film me-2 text-indigo-400"></i>PoseidonHD2 Admin</span>
+  <div class="d-flex align-items-center gap-3">
+    <span id="dbStats" class="text-muted small"></span>
+    <a href="/admin/logout" class="btn btn-sm btn-outline-secondary"><i class="bi bi-box-arrow-right me-1"></i>Salir</a>
+  </div>
+</nav>
+
+<div class="container-fluid px-3">
+  <ul class="nav nav-tabs mb-3" id="mainTabs">
+    <li class="nav-item"><button class="nav-link active" onclick="switchTab('movies')"><i class="bi bi-camera-video me-1"></i>Películas <span id="tab-movies-count" class="badge bg-secondary ms-1">—</span></button></li>
+    <li class="nav-item"><button class="nav-link" onclick="switchTab('series')"><i class="bi bi-collection-play me-1"></i>Series <span id="tab-series-count" class="badge bg-secondary ms-1">—</span></button></li>
+    <li class="nav-item"><button class="nav-link" onclick="switchTab('scrapers')"><i class="bi bi-robot me-1"></i>Scrapers</button></li>
+  </ul>
+
+  <!-- MOVIES TAB -->
+  <div id="paneMovies">
+    <div class="d-flex gap-2 mb-3 flex-wrap align-items-center">
+      <div class="input-group" style="max-width:360px">
+        <span class="input-group-text bg-transparent border-secondary"><i class="bi bi-search text-muted"></i></span>
+        <input id="movieSearch" class="form-control" placeholder="Buscar película..." onkeydown="if(event.key==='Enter')doSearchMovies()" oninput="debounce(doSearchMovies,400)">
+        <button class="btn btn-outline-secondary" onclick="clearMovieSearch()" title="Limpiar"><i class="bi bi-x-lg"></i></button>
+        <button class="btn btn-primary" onclick="doSearchMovies()"><i class="bi bi-search"></i></button>
+      </div>
+      <button class="btn btn-sm btn-primary" onclick="openEditMovie(null)"><i class="bi bi-plus-lg me-1"></i>Nueva</button>
+      <button class="btn btn-sm btn-outline-success" onclick="openImport('movies')"><i class="bi bi-upload me-1"></i>Importar JSON</button>
+      <span class="ms-auto text-muted small align-self-center" id="movieCount"></span>
+    </div>
+    <div class="card">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead><tr>
+              <th style="width:50px">#</th>
+              <th style="width:50px"></th>
+              <th>Título</th>
+              <th>Géneros</th>
+              <th>Servers</th>
+              <th style="width:90px"></th>
+            </tr></thead>
+            <tbody id="movieTable"><tr><td colspan="6" class="text-center py-4 text-muted">Cargando...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div id="moviePagination" class="d-flex justify-content-center mt-3"></div>
+  </div>
+
+  <!-- SERIES TAB -->
+  <div id="paneSeries" class="d-none">
+    <div class="d-flex gap-2 mb-3 flex-wrap align-items-center">
+      <div class="input-group" style="max-width:360px">
+        <span class="input-group-text bg-transparent border-secondary"><i class="bi bi-search text-muted"></i></span>
+        <input id="serieSearch" class="form-control" placeholder="Buscar serie..." onkeydown="if(event.key==='Enter')doSearchSeries()" oninput="debounce(doSearchSeries,400)">
+        <button class="btn btn-outline-secondary" onclick="clearSerieSearch()" title="Limpiar"><i class="bi bi-x-lg"></i></button>
+        <button class="btn btn-primary" onclick="doSearchSeries()"><i class="bi bi-search"></i></button>
+      </div>
+      <button class="btn btn-sm btn-primary" onclick="openEditSerie(null)"><i class="bi bi-plus-lg me-1"></i>Nueva</button>
+      <button class="btn btn-sm btn-outline-success" onclick="openImport('series')"><i class="bi bi-upload me-1"></i>Importar JSON</button>
+      <span class="ms-auto text-muted small align-self-center" id="serieCount"></span>
+    </div>
+    <div class="card">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead><tr>
+              <th style="width:50px">#</th>
+              <th style="width:50px"></th>
+              <th>Título</th>
+              <th>Géneros</th>
+              <th>Temporadas</th>
+              <th style="width:90px"></th>
+            </tr></thead>
+            <tbody id="serieTable"><tr><td colspan="6" class="text-center py-4 text-muted">Cargando...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div id="seriePagination" class="d-flex justify-content-center mt-3"></div>
+  </div>
+
+  <!-- SCRAPERS TAB -->
+  <div id="paneScrapers" class="d-none">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h6 class="mb-0 text-muted">Servicios del servidor</h6>
+      <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-outline-warning" onclick="syncFromCache()" id="btnSync">
+          <i class="bi bi-database-fill-up me-1"></i>Sincronizar desde cache
+        </button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="loadScrapers()"><i class="bi bi-arrow-clockwise me-1"></i>Actualizar</button>
+      </div>
+    </div>
+
+    <!-- Stats card -->
+    <div class="card mb-3">
+      <div class="card-body py-2">
+        <div class="row text-center g-0" id="statsRow">
+          <div class="col"><div class="text-muted small">Películas</div><div class="fw-bold fs-5" id="st-movies">—</div></div>
+          <div class="col border-start border-secondary"><div class="text-muted small">Series</div><div class="fw-bold fs-5" id="st-series">—</div></div>
+          <div class="col border-start border-secondary"><div class="text-muted small">Episodios</div><div class="fw-bold fs-5" id="st-episodes">—</div></div>
+          <div class="col border-start border-secondary"><div class="text-muted small">Servers películas</div><div class="fw-bold fs-5" id="st-servers">—</div></div>
+          <div class="col border-start border-secondary"><div class="text-muted small">Servers episodios</div><div class="fw-bold fs-5" id="st-epservers">—</div></div>
+        </div>
+        <div class="row mt-2 px-2 g-0">
+          <div class="col text-muted small">Última película: <span id="st-lastmovie" class="text-info">—</span></div>
+          <div class="col text-end text-muted small">Última serie: <span id="st-lastserie" class="text-info">—</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-md-4">
+        <div class="card h-100">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <div>
+                <h6 class="mb-1 fw-bold"><i class="bi bi-film me-2 text-primary"></i>flixlatam-scraper</h6>
+                <small class="text-muted">Películas</small>
+              </div>
+              <div class="d-flex align-items-center gap-2">
+                <span id="status-flixlatam-scraper" class="badge bg-secondary">—</span>
+                <button class="btn btn-sm btn-outline-info" id="btn-stream-flixlatam-scraper" onclick="toggleStream('flixlatam-scraper')"><i class="bi bi-play-fill me-1"></i>En vivo</button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="loadLogs('flixlatam-scraper')" title="Recargar logs"><i class="bi bi-arrow-clockwise"></i></button>
+              </div>
+            </div>
+            <div id="logs-flixlatam-scraper" class="rounded p-2" style="background:#050608;height:380px;overflow-y:auto;font-family:monospace;font-size:.72rem;color:#a0aec0;white-space:pre-wrap;word-break:break-all">
+              <span class="text-muted">Haz clic en Actualizar estado para cargar los logs...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card h-100">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <div>
+                <h6 class="mb-1 fw-bold"><i class="bi bi-collection-play me-2 text-success"></i>flixlatam-series</h6>
+                <small class="text-muted">Series</small>
+              </div>
+              <div class="d-flex align-items-center gap-2">
+                <span id="status-flixlatam-series" class="badge bg-secondary">—</span>
+                <button class="btn btn-sm btn-outline-info" id="btn-stream-flixlatam-series" onclick="toggleStream('flixlatam-series')"><i class="bi bi-play-fill me-1"></i>En vivo</button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="loadLogs('flixlatam-series')" title="Recargar logs"><i class="bi bi-arrow-clockwise"></i></button>
+              </div>
+            </div>
+            <div id="logs-flixlatam-series" class="rounded p-2" style="background:#050608;height:380px;overflow-y:auto;font-family:monospace;font-size:.72rem;color:#a0aec0;white-space:pre-wrap;word-break:break-all">
+              <span class="text-muted">Haz clic en Actualizar estado para cargar los logs...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Poseidon Scraper (películas) -->
+      <div class="col-md-4">
+        <div class="card h-100">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <div>
+                <h6 class="mb-1 fw-bold"><i class="bi bi-film me-2 text-warning"></i>poseidon-scraper</h6>
+                <small class="text-muted">Poseidon Películas</small>
+              </div>
+              <div class="d-flex align-items-center gap-2">
+                <span id="status-poseidon-scraper" class="badge bg-secondary">—</span>
+                <button class="btn btn-sm btn-outline-info" id="btn-stream-poseidon-scraper" onclick="toggleStream('poseidon-scraper')"><i class="bi bi-play-fill me-1"></i>En vivo</button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="loadLogs('poseidon-scraper')" title="Recargar logs"><i class="bi bi-arrow-clockwise"></i></button>
+              </div>
+            </div>
+            <div id="logs-poseidon-scraper" class="rounded p-2" style="background:#050608;height:380px;overflow-y:auto;font-family:monospace;font-size:.72rem;color:#a0aec0;white-space:pre-wrap;word-break:break-all">
+              <span class="text-muted">Haz clic en Actualizar estado para cargar los logs...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Poseidon Series -->
+      <div class="col-md-4">
+        <div class="card h-100">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <div>
+                <h6 class="mb-1 fw-bold"><i class="bi bi-collection-play me-2 text-warning"></i>poseidon-series</h6>
+                <small class="text-muted">Poseidon Series</small>
+              </div>
+              <div class="d-flex align-items-center gap-2">
+                <span id="status-poseidon-series" class="badge bg-secondary">—</span>
+                <button class="btn btn-sm btn-outline-info" id="btn-stream-poseidon-series" onclick="toggleStream('poseidon-series')"><i class="bi bi-play-fill me-1"></i>En vivo</button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="loadLogs('poseidon-series')" title="Recargar logs"><i class="bi bi-arrow-clockwise"></i></button>
+              </div>
+            </div>
+            <div id="logs-poseidon-series" class="rounded p-2" style="background:#050608;height:380px;overflow-y:auto;font-family:monospace;font-size:.72rem;color:#a0aec0;white-space:pre-wrap;word-break:break-all">
+              <span class="text-muted">Haz clic en Actualizar estado para cargar los logs...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ EDIT MOVIE MODAL ══════════ -->
+<div class="modal fade" id="editMovieModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title" id="editMovieTitle">Película</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <ul class="nav nav-tabs mb-3" id="movieEditTabs">
+          <li class="nav-item"><button class="nav-link active" onclick="showMovieTab('info')">Info</button></li>
+          <li class="nav-item"><button class="nav-link" onclick="showMovieTab('servers')">Servidores</button></li>
+        </ul>
+        <div id="movieTabInfo">
+          <div class="row g-3">
+            <div class="col-md-6"><label class="form-label small">TMDb ID *</label><input id="mTmdbId" class="form-control"></div>
+            <div class="col-md-6"><label class="form-label small">Título *</label><input id="mTitulo" class="form-control"></div>
+            <div class="col-md-6"><label class="form-label small">Título original</label><input id="mTituloOrig" class="form-control"></div>
+            <div class="col-md-3"><label class="form-label small">Rating</label><input id="mRating" class="form-control" type="number" step="0.1"></div>
+            <div class="col-md-3"><label class="form-label small">Duración (min)</label><input id="mRuntime" class="form-control" type="number"></div>
+            <div class="col-md-6"><label class="form-label small">Fecha estreno</label><input id="mDate" class="form-control" type="date"></div>
+            <div class="col-md-6"><label class="form-label small">Géneros (separados por coma)</label><input id="mGeneros" class="form-control" placeholder="Acción, Drama"></div>
+            <div class="col-12"><label class="form-label small">Poster URL</label><input id="mPoster" class="form-control"></div>
+            <div class="col-12"><label class="form-label small">Banner URL</label><input id="mBanner" class="form-control"></div>
+            <div class="col-12"><label class="form-label small">Descripción</label><textarea id="mDesc" class="form-control" rows="3"></textarea></div>
+          </div>
+        </div>
+        <div id="movieTabServers" class="d-none">
+          <div id="serverList"></div>
+          <button class="btn btn-sm btn-outline-primary mt-2" onclick="addServerRow()"><i class="bi bi-plus me-1"></i>Agregar servidor</button>
+        </div>
+      </div>
+      <div class="modal-footer border-secondary">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveMovie()"><i class="bi bi-floppy me-1"></i>Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ EDIT SERIE MODAL ══════════ -->
+<div class="modal fade" id="editSerieModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title" id="editSerieTitle">Serie</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <ul class="nav nav-tabs mb-3" id="serieEditTabs">
+          <li class="nav-item"><button class="nav-link active" onclick="showSerieTab('info')">Info</button></li>
+          <li class="nav-item"><button class="nav-link" onclick="showSerieTab('seasons')">Temporadas</button></li>
+        </ul>
+        <div id="serieTabInfo">
+          <div class="row g-3">
+            <div class="col-md-6"><label class="form-label small">TMDb ID *</label><input id="sTmdbId" class="form-control"></div>
+            <div class="col-md-6"><label class="form-label small">Título *</label><input id="sTitulo" class="form-control"></div>
+            <div class="col-md-6"><label class="form-label small">Título original</label><input id="sTituloOrig" class="form-control"></div>
+            <div class="col-md-3"><label class="form-label small">Rating</label><input id="sRating" class="form-control" type="number" step="0.1"></div>
+            <div class="col-md-3"><label class="form-label small">Fecha estreno</label><input id="sDate" class="form-control" type="date"></div>
+            <div class="col-md-6"><label class="form-label small">Géneros (separados por coma)</label><input id="sGeneros" class="form-control" placeholder="Drama, Thriller"></div>
+            <div class="col-12"><label class="form-label small">Poster URL</label><input id="sPoster" class="form-control"></div>
+            <div class="col-12"><label class="form-label small">Banner URL</label><input id="sBanner" class="form-control"></div>
+            <div class="col-12"><label class="form-label small">Descripción</label><textarea id="sDesc" class="form-control" rows="3"></textarea></div>
+          </div>
+        </div>
+        <div id="serieTabSeasons" class="d-none">
+          <nav aria-label="breadcrumb" class="mb-3">
+            <ol class="breadcrumb" id="seasonsBreadcrumb"></ol>
+          </nav>
+          <div id="seasonsView"></div>
+        </div>
+      </div>
+      <div class="modal-footer border-secondary">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveSerie()"><i class="bi bi-floppy me-1"></i>Guardar info</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ IMPORT MODAL ══════════ -->
+<div class="modal fade" id="importModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title" id="importTitle">Importar JSON</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="importStep1">
+          <div class="d-flex gap-2 mb-2 align-items-center flex-wrap">
+            <input type="file" id="importFile" class="form-control" accept=".json" style="max-width:280px" onchange="loadImportFile()">
+            <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('importJson').value=''">Limpiar</button>
+            <button class="btn btn-sm btn-outline-info ms-auto" type="button" data-bs-toggle="collapse" data-bs-target="#formatCollapse">
+              <i class="bi bi-code-slash me-1"></i>Ver formato JSON
+            </button>
+          </div>
+          <div class="collapse mb-2" id="formatCollapse">
+            <div class="card card-body p-2" style="background:#0f1117;border-color:#2d3748">
+              <div id="formatMovies">
+                <p class="text-info small mb-1 fw-bold">Formato películas — array de objetos:</p>
+                <pre class="text-success" style="font-size:.72rem;margin:0;white-space:pre-wrap">[
+  {
+    "tmdb_id": "12345",
+    "titulo": "Mi Película",
+    "titulo_original": "My Movie",
+    "poster_url": "https://image.tmdb.org/t/p/original/xxx.jpg",
+    "banner_url": "https://image.tmdb.org/t/p/original/yyy.jpg",
+    "descripcion": "Descripción de la película.",
+    "rating": 7.5,
+    "runtime_min": 120,
+    "release_date": "2024-01-15",
+    "generos": ["Acción", "Drama"],
+    "servidores": [
+      {
+        "idioma": "Español Latino",
+        "nombre": "streamwish",
+        "calidad": "HD",
+        "url": "https://streamwish.to/e/abc123",
+        "embed_id": "abc123",
+        "player_url": ""
+      }
+    ]
+  }
+]</pre>
+              </div>
+              <div id="formatSeries" class="d-none">
+                <p class="text-info small mb-1 fw-bold">Formato series — array de objetos:</p>
+                <pre class="text-success" style="font-size:.72rem;margin:0;white-space:pre-wrap">[
+  {
+    "tmdb_id": "1396",
+    "titulo": "Breaking Bad",
+    "titulo_original": "Breaking Bad",
+    "poster_url": "https://image.tmdb.org/t/p/original/xxx.jpg",
+    "banner_url": "https://image.tmdb.org/t/p/original/yyy.jpg",
+    "descripcion": "Un profesor de química...",
+    "rating": 9.5,
+    "release_date": "2008-01-20",
+    "generos": ["Drama", "Crimen"],
+    "temporadas": [
+      {
+        "number": 1,
+        "episodios": [
+          {
+            "tmdb_id": "62085",
+            "number": 1,
+            "titulo": "Pilot",
+            "imagen": "https://image.tmdb.org/t/p/original/zzz.jpg",
+            "servidores": [
+              {
+                "idioma": "Español Latino",
+                "nombre": "streamwish",
+                "calidad": "HD",
+                "url": "https://streamwish.to/e/abc",
+                "embed_id": "abc",
+                "player_url": ""
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]</pre>
+              </div>
+            </div>
+          </div>
+          <textarea id="importJson" class="form-control" rows="8" placeholder='[{"tmdb_id":"123","titulo":"..."}]'></textarea>
+        </div>
+        <div id="importStep2" class="d-none">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+              <span class="badge bg-success me-2" id="newCount">0 nuevos</span>
+              <span class="badge bg-warning text-dark" id="conflictCount">0 conflictos</span>
+            </div>
+            <div class="d-flex gap-2 align-items-center">
+              <span class="text-muted small">Aplicar a todos los conflictos:</span>
+              <button class="btn btn-sm btn-outline-danger" onclick="setAllAction('overwrite')">Sobreescribir</button>
+              <button class="btn btn-sm btn-outline-warning" onclick="setAllAction('merge')">Merge</button>
+              <button class="btn btn-sm btn-outline-secondary" onclick="setAllAction('skip')">Omitir</button>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm">
+              <thead><tr><th>#</th><th>TMDb ID</th><th>Título</th><th>Estado</th><th>Acción</th></tr></thead>
+              <tbody id="previewTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div id="importProgress" class="px-3 pb-2 d-none">
+        <div class="d-flex justify-content-between small text-muted mb-1">
+          <span id="progressLabel">Procesando...</span>
+          <span id="progressPct">0%</span>
+        </div>
+        <div class="progress" style="height:6px">
+          <div id="progressBar" class="progress-bar bg-success" style="width:0%"></div>
+        </div>
+      </div>
+      <div class="modal-footer border-secondary">
+        <button class="btn btn-secondary" id="backBtn" onclick="resetImport()">← Volver</button>
+        <button class="btn btn-info" id="previewBtn" onclick="previewImport()"><i class="bi bi-eye me-1"></i>Preview</button>
+        <button class="btn btn-success d-none" id="executeBtn" onclick="executeImport()"><i class="bi bi-check-lg me-1"></i>Ejecutar importación</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ CONFIRM DELETE MODAL ══════════ -->
+<div class="modal fade" id="confirmModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-body text-center py-4">
+        <i class="bi bi-exclamation-triangle-fill text-warning fs-1 mb-3 d-block"></i>
+        <p id="confirmMsg" class="mb-0">¿Eliminar este elemento?</p>
+      </div>
+      <div class="modal-footer border-secondary justify-content-center">
+        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-danger btn-sm" id="confirmOk">Eliminar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toasts -->
+<div class="toast-container">
+  <div id="toastEl" class="toast align-items-center border-0" role="alert">
+    <div class="d-flex">
+      <div class="toast-body" id="toastMsg"></div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+const S = {
+  tab: 'movies',
+  moviePage: 1, seriePage: 1,
+  editingMovieId: null,
+  editingSerieId: null,
+  importType: 'movies',
+  importItems: [],
+  previewResults: [],
+  serieNavPath: [],   // [{type:'seasons'} | {type:'episodes',serieId,seasonNum} | {type:'servers',serieId,seasonNum,epId}]
+}
+let _debounceTimer = null
+
+// ── Bootstrap modals ───────────────────────────────────────────────────────
+const modals = {}
+document.addEventListener('DOMContentLoaded', () => {
+  modals.editMovie  = new bootstrap.Modal('#editMovieModal')
+  modals.editSerie  = new bootstrap.Modal('#editSerieModal')
+  modals.import     = new bootstrap.Modal('#importModal')
+  modals.confirm    = new bootstrap.Modal('#confirmModal')
+  loadStats()
+  loadMovies(1)
+})
+
+// ── API ────────────────────────────────────────────────────────────────────
+async function api(path, opts = {}) {
+  const r = await fetch('/api/admin' + path, {
+    headers: {'Content-Type':'application/json'},
+    ...opts
+  })
+  if (!r.ok) {
+    const t = await r.text()
+    throw new Error(t)
+  }
+  return r.json()
+}
+
+// ── Utils ──────────────────────────────────────────────────────────────────
+function debounce(fn, ms) {
+  clearTimeout(_debounceTimer)
+  _debounceTimer = setTimeout(fn, ms)
+}
+function loading(on) {
+  document.getElementById('loadingOverlay').style.display = on ? 'flex' : 'none'
+}
+function toast(msg, type='success') {
+  const el = document.getElementById('toastEl')
+  const bg = type==='success'?'bg-success':type==='danger'?'bg-danger':'bg-warning text-dark'
+  el.className = `toast align-items-center border-0 text-white ${bg}`
+  document.getElementById('toastMsg').textContent = msg
+  bootstrap.Toast.getOrCreateInstance(el, {delay:3000}).show()
+}
+function confirm(msg, cb) {
+  document.getElementById('confirmMsg').textContent = msg
+  document.getElementById('confirmOk').onclick = () => { modals.confirm.hide(); cb() }
+  modals.confirm.show()
+}
+function posterHtml(url) {
+  return url
+    ? `<img src="${url}" class="poster-thumb" onerror="this.style.display='none'">`
+    : `<div class="poster-placeholder"><i class="bi bi-image"></i></div>`
+}
+function badgesHtml(arr, cls='bg-secondary') {
+  return (arr||[]).map(g=>`<span class="badge ${cls} badge-server me-1">${g}</span>`).join('')
+}
+async function loadStats() {
+  try {
+    const [m,s] = await Promise.all([api('/movies'),api('/series')])
+    document.getElementById('dbStats').textContent = `${m.total.toLocaleString()} películas · ${s.total.toLocaleString()} series`
+    document.getElementById('tab-movies-count').textContent = m.total.toLocaleString()
+    document.getElementById('tab-series-count').textContent = s.total.toLocaleString()
+  } catch(e){}
+}
+
+// ── Tab switch ─────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  S.tab = tab
+  document.getElementById('paneMovies').classList.toggle('d-none', tab!=='movies')
+  document.getElementById('paneSeries').classList.toggle('d-none', tab!=='series')
+  document.getElementById('paneScrapers').classList.toggle('d-none', tab!=='scrapers')
+  document.querySelectorAll('#mainTabs .nav-link').forEach((b,i)=>{
+    b.classList.toggle('active', (i===0&&tab==='movies')||(i===1&&tab==='series')||(i===2&&tab==='scrapers'))
+  })
+  if (tab==='movies') loadMovies(S.moviePage)
+  else if (tab==='series') loadSeries(S.seriePage)
+  else if (tab==='scrapers') loadScrapers()
+}
+
+// ── Movies list ────────────────────────────────────────────────────────────
+function doSearchMovies() { loadMovies(1) }
+function clearMovieSearch() { document.getElementById('movieSearch').value=''; loadMovies(1) }
+
+async function loadMovies(page=1) {
+  S.moviePage = page
+  const q = document.getElementById('movieSearch').value.trim()
+  try {
+    let data
+    if (q) {
+      const arr = await api(`/movies/search?q=${encodeURIComponent(q)}`)
+      data = {movies: Array.isArray(arr) ? arr : [], page:1, total: Array.isArray(arr)?arr.length:0, total_pages:1}
+    } else {
+      data = await api(`/movies?page=${page}`)
+    }
+    document.getElementById('movieCount').textContent = q
+      ? `${data.total} resultado(s) para "${q}"`
+      : `${data.total} películas`
+    const tbody = document.getElementById('movieTable')
+    if (!data.movies.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">Sin resultados</td></tr>'
+      document.getElementById('moviePagination').innerHTML = ''
+      return
+    }
+    tbody.innerHTML = data.movies.map(m=>`
+      <tr>
+        <td class="text-muted small">${m.id}</td>
+        <td>${posterHtml(m.poster_url)}</td>
+        <td><span class="fw-medium">${esc(m.titulo)}</span></td>
+        <td><span class="text-muted small">—</span></td>
+        <td><span class="text-muted small">—</span></td>
+        <td>
+          <button class="btn btn-sm btn-outline-primary btn-icon me-1" onclick="openEditMovie(${m.id})" title="Editar"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-sm btn-outline-danger btn-icon" data-titulo="${esc(m.titulo)}" onclick="removeMovie(${m.id},this.dataset.titulo)" title="Eliminar"><i class="bi bi-trash"></i></button>
+        </td>
+      </tr>`).join('')
+    renderPagination('moviePagination', data.page, data.total_pages, p=>loadMovies(p))
+  } catch(e) { toast(e.message,'danger') }
+}
+
+async function removeMovie(id, titulo) {
+  confirm(`¿Eliminar "${titulo}"?`, async () => {
+    try {
+      await api(`/movies/${id}`, {method:'DELETE'})
+      toast('Película eliminada')
+      loadMovies(S.moviePage)
+      loadStats()
+    } catch(e) { toast(e.message,'danger') }
+  })
+}
+
+// ── Edit movie ─────────────────────────────────────────────────────────────
+async function openEditMovie(id) {
+  S.editingMovieId = id
+  showMovieTab('info')
+  clearServerList()
+  if (id) {
+    document.getElementById('editMovieTitle').textContent = 'Editar Película'
+    loading(true)
+    try {
+      const m = await api(`/movies/${id}`)
+      document.getElementById('mTmdbId').value   = m.tmdb_id
+      document.getElementById('mTitulo').value   = m.titulo
+      document.getElementById('mTituloOrig').value = m.titulo_original
+      document.getElementById('mRating').value   = m.rating
+      document.getElementById('mRuntime').value  = m.runtime_min
+      document.getElementById('mDate').value     = (m.release_date||'').slice(0,10)
+      document.getElementById('mGeneros').value  = (m.generos||[]).join(', ')
+      document.getElementById('mPoster').value   = m.poster_url
+      document.getElementById('mBanner').value   = m.banner_url
+      document.getElementById('mDesc').value     = m.descripcion
+      renderServerList(m.servidores||[], id)
+    } catch(e) { toast(e.message,'danger') }
+    loading(false)
+  } else {
+    document.getElementById('editMovieTitle').textContent = 'Nueva Película'
+    ;['mTmdbId','mTitulo','mTituloOrig','mRating','mRuntime','mDate','mGeneros','mPoster','mBanner','mDesc'].forEach(id=>document.getElementById(id).value='')
+  }
+  modals.editMovie.show()
+}
+
+function showMovieTab(tab) {
+  document.getElementById('movieTabInfo').classList.toggle('d-none', tab!=='info')
+  document.getElementById('movieTabServers').classList.toggle('d-none', tab!=='servers')
+  document.querySelectorAll('#movieEditTabs .nav-link').forEach((b,i)=>{
+    b.classList.toggle('active', (i===0&&tab==='info')||(i===1&&tab==='servers'))
+  })
+}
+
+async function saveMovie() {
+  const tmdbId = document.getElementById('mTmdbId').value.trim()
+  const titulo = document.getElementById('mTitulo').value.trim()
+  if (!tmdbId || !titulo) { toast('TMDb ID y Título son obligatorios','warning'); return }
+  const body = {
+    tmdb_id: tmdbId,
+    titulo,
+    titulo_original: document.getElementById('mTituloOrig').value.trim(),
+    rating: parseFloat(document.getElementById('mRating').value)||0,
+    runtime_min: parseInt(document.getElementById('mRuntime').value)||0,
+    release_date: document.getElementById('mDate').value||'',
+    generos: document.getElementById('mGeneros').value.split(',').map(g=>g.trim()).filter(Boolean),
+    poster_url: document.getElementById('mPoster').value.trim(),
+    banner_url: document.getElementById('mBanner').value.trim(),
+    descripcion: document.getElementById('mDesc').value.trim(),
+  }
+  loading(true)
+  try {
+    if (S.editingMovieId) {
+      await api(`/movies/${S.editingMovieId}`, {method:'PUT', body:JSON.stringify(body)})
+      toast('Película actualizada')
+    } else {
+      const r = await api('/movies', {method:'POST', body:JSON.stringify(body)})
+      S.editingMovieId = r.id
+      toast('Película creada')
+    }
+    modals.editMovie.hide()
+    loadMovies(S.moviePage)
+    loadStats()
+  } catch(e) { toast(e.message,'danger') }
+  loading(false)
+}
+
+// ── Servers (movie) ────────────────────────────────────────────────────────
+function clearServerList() { document.getElementById('serverList').innerHTML = '' }
+
+function renderServerList(servers, movieId) {
+  const list = document.getElementById('serverList')
+  list.innerHTML = servers.map((s,i)=>`
+    <div class="server-row d-flex gap-2 align-items-center" id="srv_${s.id||'new'+i}">
+      <select class="form-select" style="width:140px" data-field="idioma">
+        ${['Español Latino','Español','Inglés / Subtitulado'].map(o=>`<option${o===s.idioma?' selected':''}>${o}</option>`).join('')}
+      </select>
+      <input class="form-control" style="width:110px" placeholder="nombre" value="${esc(s.nombre)}" data-field="nombre">
+      <input class="form-control" style="width:70px" placeholder="HD" value="${esc(s.calidad)}" data-field="calidad">
+      <input class="form-control flex-grow-1" placeholder="URL" value="${esc(s.url)}" data-field="url">
+      <input class="form-control" style="width:130px" placeholder="embed_id" value="${esc(s.embed_id)}" data-field="embed_id">
+      ${s.id ? `
+        <button class="btn btn-sm btn-outline-success btn-icon" onclick="saveServerRow(${s.id},'srv_${s.id}')" title="Guardar"><i class="bi bi-check-lg"></i></button>
+        <button class="btn btn-sm btn-outline-danger btn-icon" onclick="deleteServerRow(${s.id},'srv_${s.id}')" title="Eliminar"><i class="bi bi-trash"></i></button>
+      ` : `<button class="btn btn-sm btn-outline-primary btn-icon" onclick="saveNewServerRow(this)" title="Guardar"><i class="bi bi-check-lg"></i></button>`}
+    </div>`).join('')
+}
+
+function addServerRow() {
+  if (!S.editingMovieId) { toast('Guarda primero la película','warning'); return }
+  const list = document.getElementById('serverList')
+  const div = document.createElement('div')
+  div.className = 'server-row d-flex gap-2 align-items-center'
+  div.innerHTML = `
+    <select class="form-select" style="width:140px" data-field="idioma">
+      <option>Español Latino</option><option>Español</option><option>Inglés / Subtitulado</option>
+    </select>
+    <input class="form-control" style="width:110px" placeholder="nombre (streamwish...)" data-field="nombre">
+    <input class="form-control" style="width:70px" placeholder="HD" data-field="calidad">
+    <input class="form-control flex-grow-1" placeholder="https://..." data-field="url">
+    <input class="form-control" style="width:130px" placeholder="embed_id" data-field="embed_id">
+    <button class="btn btn-sm btn-outline-success btn-icon" onclick="saveNewServerRow(this)" title="Guardar"><i class="bi bi-check-lg"></i></button>
+    <button class="btn btn-sm btn-outline-secondary btn-icon" onclick="this.closest('.server-row').remove()" title="Quitar"><i class="bi bi-x-lg"></i></button>`
+  list.appendChild(div)
+}
+
+function getRowData(row) {
+  const get = f => row.querySelector(`[data-field="${f}"]`).value.trim()
+  return { idioma:get('idioma'), nombre:get('nombre'), calidad:get('calidad')||'HD', url:get('url'), embed_id:get('embed_id'), player_url:'' }
+}
+
+async function saveNewServerRow(btn) {
+  const row = btn.closest('.server-row')
+  const data = getRowData(row)
+  if (!data.url) { toast('URL requerida','warning'); return }
+  try {
+    const r = await api(`/movies/${S.editingMovieId}/servers`, {method:'POST', body:JSON.stringify(data)})
+    toast('Servidor agregado')
+    row.dataset.srvId = r.id
+    btn.outerHTML = `
+      <button class="btn btn-sm btn-outline-success btn-icon" onclick="saveServerRow(${r.id},this)" title="Guardar"><i class="bi bi-check-lg"></i></button>
+      <button class="btn btn-sm btn-outline-danger btn-icon" onclick="deleteServerRow(${r.id},this)" title="Eliminar"><i class="bi bi-trash"></i></button>`
+  } catch(e) { toast(e.message,'danger') }
+}
+
+async function saveServerRow(srvId, el) {
+  const row = (el.closest ? el : document.getElementById(el)).closest('.server-row')
+  const data = getRowData(row)
+  try {
+    await api(`/servers/${srvId}`, {method:'PUT', body:JSON.stringify(data)})
+    toast('Servidor actualizado')
+  } catch(e) { toast(e.message,'danger') }
+}
+
+async function deleteServerRow(srvId, el) {
+  confirm('¿Eliminar este servidor?', async () => {
+    try {
+      await api(`/servers/${srvId}`, {method:'DELETE'})
+      const row = (el.closest ? el : document.getElementById(el)).closest('.server-row')
+      row.remove()
+      toast('Servidor eliminado')
+    } catch(e) { toast(e.message,'danger') }
+  })
+}
+
+// ── Series list ────────────────────────────────────────────────────────────
+function doSearchSeries() { loadSeries(1) }
+function clearSerieSearch() { document.getElementById('serieSearch').value=''; loadSeries(1) }
+
+async function loadSeries(page=1) {
+  S.seriePage = page
+  const q = document.getElementById('serieSearch').value.trim()
+  try {
+    let data
+    if (q) {
+      const arr = await api(`/series/search?q=${encodeURIComponent(q)}`)
+      data = {series: Array.isArray(arr) ? arr : [], page:1, total: Array.isArray(arr)?arr.length:0, total_pages:1}
+    } else {
+      data = await api(`/series?page=${page}`)
+    }
+    document.getElementById('serieCount').textContent = q
+      ? `${data.total} resultado(s) para "${q}"`
+      : `${data.total} series`
+    const tbody = document.getElementById('serieTable')
+    if (!data.series.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">Sin resultados</td></tr>'
+      document.getElementById('seriePagination').innerHTML = ''
+      return
+    }
+    tbody.innerHTML = data.series.map(s=>`
+      <tr>
+        <td class="text-muted small">${s.id}</td>
+        <td>${posterHtml(s.poster_url)}</td>
+        <td><span class="fw-medium">${esc(s.titulo)}</span></td>
+        <td><span class="text-muted small">—</span></td>
+        <td><span class="text-muted small">—</span></td>
+        <td>
+          <button class="btn btn-sm btn-outline-primary btn-icon me-1" onclick="openEditSerie(${s.id})" title="Editar"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-sm btn-outline-danger btn-icon" data-titulo="${esc(s.titulo)}" onclick="removeSerie(${s.id},this.dataset.titulo)" title="Eliminar"><i class="bi bi-trash"></i></button>
+        </td>
+      </tr>`).join('')
+    renderPagination('seriePagination', data.page, data.total_pages, p=>loadSeries(p))
+  } catch(e) { toast(e.message,'danger') }
+}
+
+async function removeSerie(id, titulo) {
+  confirm(`¿Eliminar la serie "${titulo}" y todos sus episodios?`, async () => {
+    try {
+      await api(`/series/${id}`, {method:'DELETE'})
+      toast('Serie eliminada')
+      loadSeries(S.seriePage)
+      loadStats()
+    } catch(e) { toast(e.message,'danger') }
+  })
+}
+
+// ── Edit serie ─────────────────────────────────────────────────────────────
+async function openEditSerie(id) {
+  S.editingSerieId = id
+  S.serieNavPath = []
+  showSerieTab('info')
+  if (id) {
+    document.getElementById('editSerieTitle').textContent = 'Editar Serie'
+    loading(true)
+    try {
+      const s = await api(`/series/${id}`)
+      document.getElementById('sTmdbId').value    = s.tmdb_id
+      document.getElementById('sTitulo').value    = s.titulo
+      document.getElementById('sTituloOrig').value= s.titulo_original
+      document.getElementById('sRating').value    = s.rating
+      document.getElementById('sDate').value      = (s.release_date||'').slice(0,10)
+      document.getElementById('sGeneros').value   = (s.generos||[]).join(', ')
+      document.getElementById('sPoster').value    = s.poster_url
+      document.getElementById('sBanner').value    = s.banner_url
+      document.getElementById('sDesc').value      = s.descripcion
+    } catch(e) { toast(e.message,'danger') }
+    loading(false)
+  } else {
+    document.getElementById('editSerieTitle').textContent = 'Nueva Serie'
+    ;['sTmdbId','sTitulo','sTituloOrig','sRating','sDate','sGeneros','sPoster','sBanner','sDesc'].forEach(i=>document.getElementById(i).value='')
+  }
+  modals.editSerie.show()
+}
+
+function showSerieTab(tab) {
+  document.getElementById('serieTabInfo').classList.toggle('d-none', tab!=='info')
+  document.getElementById('serieTabSeasons').classList.toggle('d-none', tab!=='seasons')
+  document.querySelectorAll('#serieEditTabs .nav-link').forEach((b,i)=>{
+    b.classList.toggle('active', (i===0&&tab==='info')||(i===1&&tab==='seasons'))
+  })
+  if (tab==='seasons' && S.editingSerieId) {
+    S.serieNavPath = []
+    renderSeasonsNav()
+  }
+}
+
+async function saveSerie() {
+  const tmdbId = document.getElementById('sTmdbId').value.trim()
+  const titulo = document.getElementById('sTitulo').value.trim()
+  if (!tmdbId || !titulo) { toast('TMDb ID y Título son obligatorios','warning'); return }
+  const body = {
+    tmdb_id: tmdbId, titulo,
+    titulo_original: document.getElementById('sTituloOrig').value.trim(),
+    rating: parseFloat(document.getElementById('sRating').value)||0,
+    release_date: document.getElementById('sDate').value||'',
+    generos: document.getElementById('sGeneros').value.split(',').map(g=>g.trim()).filter(Boolean),
+    poster_url: document.getElementById('sPoster').value.trim(),
+    banner_url: document.getElementById('sBanner').value.trim(),
+    descripcion: document.getElementById('sDesc').value.trim(),
+    temporadas: []
+  }
+  loading(true)
+  try {
+    if (S.editingSerieId) {
+      await api(`/series/${S.editingSerieId}`, {method:'PUT', body:JSON.stringify(body)})
+      toast('Serie actualizada')
+    } else {
+      const r = await api('/series', {method:'POST', body:JSON.stringify(body)})
+      S.editingSerieId = r.id
+      toast('Serie creada — ahora puedes gestionar temporadas')
+    }
+    loadSeries(S.seriePage)
+    loadStats()
+  } catch(e) { toast(e.message,'danger') }
+  loading(false)
+}
+
+// ── Seasons navigation ─────────────────────────────────────────────────────
+async function renderSeasonsNav() {
+  const level = S.serieNavPath.length
+  const bc = document.getElementById('seasonsBreadcrumb')
+  const view = document.getElementById('seasonsView')
+
+  // Build breadcrumb
+  let bcHtml = `<li class="breadcrumb-item"><a onclick="navToLevel(0)">Temporadas</a></li>`
+  if (level >= 1) bcHtml += `<li class="breadcrumb-item"><a onclick="navToLevel(1)">T${S.serieNavPath[0].seasonNum}</a></li>`
+  if (level >= 2) bcHtml += `<li class="breadcrumb-item active">Ep ${S.serieNavPath[1].epNum} — Servidores</li>`
+  bc.innerHTML = bcHtml
+
+  loading(true)
+  try {
+    if (level === 0) {
+      // Show seasons list
+      const s = await api(`/series/${S.editingSerieId}`)
+      if (!s.temporadas.length) {
+        view.innerHTML = '<p class="text-muted">Sin temporadas.</p>'; loading(false); return
+      }
+      view.innerHTML = s.temporadas.map(t=>`
+        <button class="season-btn" onclick="navToEpisodes(${t.number})">
+          <i class="bi bi-collection me-2"></i>Temporada ${t.number}
+          <span class="badge bg-secondary ms-2">${t.total_episodios} episodios</span>
+        </button>`).join('')
+    } else if (level === 1) {
+      const {seasonNum} = S.serieNavPath[0]
+      const data = await api(`/series/${S.editingSerieId}/season/${seasonNum}`)
+      if (!data.episodios.length) {
+        view.innerHTML = '<p class="text-muted">Sin episodios.</p>'; loading(false); return
+      }
+      view.innerHTML = data.episodios.map(ep=>`
+        <div class="episode-item" onclick="navToServers(${ep.id}, ${ep.number})">
+          <span><span class="badge bg-secondary me-2">E${ep.number}</span>${esc(ep.titulo)}</span>
+          <span class="badge bg-primary">${ep.servidores.length} serv.</span>
+        </div>`).join('')
+    } else {
+      // Servers for episode
+      const {epId} = S.serieNavPath[1]
+      const seasonNum = S.serieNavPath[0].seasonNum
+      const data = await api(`/series/${S.editingSerieId}/season/${seasonNum}`)
+      const ep = data.episodios.find(e=>e.id===epId)
+      if (!ep) { view.innerHTML = '<p class="text-muted">Episodio no encontrado.</p>'; loading(false); return }
+      renderEpServers(ep.servidores, epId, view)
+    }
+  } catch(e) { toast(e.message,'danger') }
+  loading(false)
+}
+
+function navToLevel(lvl) {
+  S.serieNavPath = S.serieNavPath.slice(0, lvl)
+  renderSeasonsNav()
+}
+function navToEpisodes(seasonNum) {
+  S.serieNavPath = [{seasonNum}]
+  renderSeasonsNav()
+}
+function navToServers(epId, epNum) {
+  S.serieNavPath = [S.serieNavPath[0], {epId, epNum}]
+  renderSeasonsNav()
+}
+
+function renderEpServers(servers, epId, container) {
+  let html = servers.map(s=>`
+    <div class="server-row d-flex gap-2 align-items-center" id="esrv_${s.id}">
+      <select class="form-select" style="width:140px" data-field="idioma">
+        ${['Español Latino','Español','Inglés / Subtitulado'].map(o=>`<option${o===s.idioma?' selected':''}>${o}</option>`).join('')}
+      </select>
+      <input class="form-control" style="width:110px" value="${esc(s.nombre)}" data-field="nombre" placeholder="nombre">
+      <input class="form-control" style="width:70px" value="${esc(s.calidad)}" data-field="calidad" placeholder="HD">
+      <input class="form-control flex-grow-1" value="${esc(s.url)}" data-field="url" placeholder="URL">
+      <input class="form-control" style="width:130px" value="${esc(s.embed_id)}" data-field="embed_id" placeholder="embed_id">
+      <button class="btn btn-sm btn-outline-success btn-icon" onclick="saveEpServer(${s.id}, this)" title="Guardar"><i class="bi bi-check-lg"></i></button>
+      <button class="btn btn-sm btn-outline-danger btn-icon" onclick="delEpServer(${s.id}, this)" title="Eliminar"><i class="bi bi-trash"></i></button>
+    </div>`).join('')
+  html += `<button class="btn btn-sm btn-outline-primary mt-2" onclick="addEpServerRow(${epId}, this)"><i class="bi bi-plus me-1"></i>Agregar servidor</button>`
+  container.innerHTML = html
+}
+
+async function saveEpServer(srvId, btn) {
+  const data = getRowData(btn.closest('.server-row'))
+  try {
+    await api(`/episode-servers/${srvId}`, {method:'PUT', body:JSON.stringify(data)})
+    toast('Servidor actualizado')
+  } catch(e) { toast(e.message,'danger') }
+}
+
+async function delEpServer(srvId, btn) {
+  confirm('¿Eliminar este servidor?', async () => {
+    try {
+      await api(`/episode-servers/${srvId}`, {method:'DELETE'})
+      btn.closest('.server-row').remove()
+      toast('Servidor eliminado')
+    } catch(e) { toast(e.message,'danger') }
+  })
+}
+
+function addEpServerRow(epId, btn) {
+  const div = document.createElement('div')
+  div.className = 'server-row d-flex gap-2 align-items-center'
+  div.innerHTML = `
+    <select class="form-select" style="width:140px" data-field="idioma">
+      <option>Español Latino</option><option>Español</option><option>Inglés / Subtitulado</option>
+    </select>
+    <input class="form-control" style="width:110px" placeholder="streamwish..." data-field="nombre">
+    <input class="form-control" style="width:70px" placeholder="HD" data-field="calidad">
+    <input class="form-control flex-grow-1" placeholder="https://..." data-field="url">
+    <input class="form-control" style="width:130px" placeholder="embed_id" data-field="embed_id">
+    <button class="btn btn-sm btn-outline-success btn-icon" onclick="saveNewEpServer(${epId}, this)" title="Guardar"><i class="bi bi-check-lg"></i></button>
+    <button class="btn btn-sm btn-outline-secondary btn-icon" onclick="this.closest('.server-row').remove()"><i class="bi bi-x-lg"></i></button>`
+  btn.parentNode.insertBefore(div, btn)
+}
+
+async function saveNewEpServer(epId, btn) {
+  const data = getRowData(btn.closest('.server-row'))
+  if (!data.url) { toast('URL requerida','warning'); return }
+  try {
+    const r = await api(`/episodes/${epId}/servers`, {method:'POST', body:JSON.stringify(data)})
+    toast('Servidor agregado')
+    const row = btn.closest('.server-row')
+    btn.outerHTML = `
+      <button class="btn btn-sm btn-outline-success btn-icon" onclick="saveEpServer(${r.id},this)" title="Guardar"><i class="bi bi-check-lg"></i></button>
+      <button class="btn btn-sm btn-outline-danger btn-icon" onclick="delEpServer(${r.id},this)" title="Eliminar"><i class="bi bi-trash"></i></button>`
+  } catch(e) { toast(e.message,'danger') }
+}
+
+// ── Import ─────────────────────────────────────────────────────────────────
+function openImport(type) {
+  S.importType = type
+  document.getElementById('importTitle').textContent = type==='movies' ? 'Importar Películas JSON' : 'Importar Series JSON'
+  document.getElementById('formatMovies').classList.toggle('d-none', type!=='movies')
+  document.getElementById('formatSeries').classList.toggle('d-none', type!=='series')
+  resetImport()
+  modals.import.show()
+}
+
+function resetImport() {
+  document.getElementById('importStep1').classList.remove('d-none')
+  document.getElementById('importStep2').classList.add('d-none')
+  document.getElementById('previewBtn').classList.remove('d-none')
+  document.getElementById('executeBtn').classList.add('d-none')
+}
+
+function loadImportFile() {
+  const f = document.getElementById('importFile').files[0]
+  if (!f) return
+  const reader = new FileReader()
+  reader.onload = e => document.getElementById('importJson').value = e.target.result
+  reader.readAsText(f)
+}
+
+async function previewImport() {
+  const raw = document.getElementById('importJson').value.trim()
+  if (!raw) { toast('Pega el JSON primero','warning'); return }
+  let items
+  try { items = JSON.parse(raw) } catch(e) { toast('JSON inválido: '+e.message,'danger'); return }
+  if (!Array.isArray(items)) { toast('El JSON debe ser un array','warning'); return }
+  S.importItems = items
+  loading(true)
+  try {
+    const endpoint = S.importType==='movies' ? '/import/movies/preview' : '/import/series/preview'
+    S.previewResults = await api(endpoint, {method:'POST', body:JSON.stringify(items)})
+    renderPreviewTable()
+    document.getElementById('importStep1').classList.add('d-none')
+    document.getElementById('importStep2').classList.remove('d-none')
+    document.getElementById('previewBtn').classList.add('d-none')
+    document.getElementById('executeBtn').classList.remove('d-none')
+  } catch(e) { toast(e.message,'danger') }
+  loading(false)
+}
+
+function renderPreviewTable() {
+  const news = S.previewResults.filter(r=>r.status==='new').length
+  const conflicts = S.previewResults.filter(r=>r.status==='exists').length
+  document.getElementById('newCount').textContent = `${news} nuevos`
+  document.getElementById('conflictCount').textContent = `${conflicts} conflictos`
+
+  const tbody = document.getElementById('previewTable')
+  tbody.innerHTML = S.previewResults.map((r,i)=>`
+    <tr class="conflict-row">
+      <td>${i+1}</td>
+      <td class="text-muted">${r.tmdb_id}</td>
+      <td>${esc(r.titulo)}</td>
+      <td>${r.status==='new'
+        ? '<span class="badge bg-success">Nuevo</span>'
+        : `<span class="badge bg-warning text-dark">Existe</span> <small class="text-muted">ID:${r.existing_id} "${esc(r.existing_titulo)}"</small>`}
+      </td>
+      <td>${r.status==='new'
+        ? '<span class="text-muted small">Se creará</span>'
+        : `<div class="d-flex gap-2">
+            <label class="d-flex align-items-center gap-1 small"><input type="radio" name="act_${r.tmdb_id}" value="overwrite"> Sobreescribir</label>
+            <label class="d-flex align-items-center gap-1 small"><input type="radio" name="act_${r.tmdb_id}" value="merge" checked> Merge</label>
+            <label class="d-flex align-items-center gap-1 small"><input type="radio" name="act_${r.tmdb_id}" value="skip"> Omitir</label>
+          </div>`}
+      </td>
+    </tr>`).join('')
+}
+
+function setAllAction(action) {
+  S.previewResults.filter(r=>r.status==='exists').forEach(r=>{
+    const radio = document.querySelector(`input[name="act_${r.tmdb_id}"][value="${action}"]`)
+    if (radio) radio.checked = true
+  })
+}
+
+async function executeImport() {
+  const BATCH = 20
+  const decisions = {}
+  S.previewResults.forEach(r => {
+    if (r.status==='exists') {
+      const checked = document.querySelector(`input[name="act_${r.tmdb_id}"]:checked`)
+      decisions[r.tmdb_id] = checked ? checked.value : 'skip'
+    }
+  })
+  const endpoint = S.importType==='movies' ? '/import/movies/execute' : '/import/series/execute'
+  const total = S.importItems.length
+  const totals = {created:0, updated:0, merged:0, skipped:0, errors:[]}
+
+  // UI: mostrar progreso, deshabilitar botones
+  document.getElementById('importProgress').classList.remove('d-none')
+  document.getElementById('executeBtn').disabled = true
+  document.getElementById('backBtn').disabled = true
+  const barEl   = document.getElementById('progressBar')
+  const lblEl   = document.getElementById('progressLabel')
+  const pctEl   = document.getElementById('progressPct')
+
+  const setProgress = (done) => {
+    const pct = total ? Math.round(done/total*100) : 100
+    barEl.style.width = pct + '%'
+    pctEl.textContent = pct + '%'
+    lblEl.textContent = `Procesando lote… ${done} / ${total}`
+  }
+
+  try {
+    for (let i = 0; i < total; i += BATCH) {
+      setProgress(i)
+      const batch = S.importItems.slice(i, i + BATCH)
+      const res = await api(endpoint, {method:'POST', body:JSON.stringify({items:batch, decisions})})
+      totals.created += res.created||0
+      totals.updated += res.updated||0
+      totals.merged  += res.merged||0
+      totals.skipped += res.skipped||0
+      if (res.errors?.length) totals.errors.push(...res.errors)
+    }
+    setProgress(total)
+    await new Promise(r => setTimeout(r, 400))
+    modals.import.hide()
+    toast(`Creados: ${totals.created} · Actualizados: ${totals.updated} · Merge: ${totals.merged} · Omitidos: ${totals.skipped}${totals.errors.length?' · Errores: '+totals.errors.length:''}`)
+    if (S.importType==='movies') loadMovies(1); else loadSeries(1)
+    loadStats()
+  } catch(e) { toast(e.message,'danger') }
+
+  document.getElementById('executeBtn').disabled = false
+  document.getElementById('backBtn').disabled = false
+  document.getElementById('importProgress').classList.add('d-none')
+}
+
+// ── Pagination ─────────────────────────────────────────────────────────────
+function renderPagination(containerId, current, total, cb) {
+  const el = document.getElementById(containerId)
+  if (total <= 1) { el.innerHTML=''; return }
+  const pages = []
+  if (current > 1) pages.push({l:'‹', p:current-1})
+  const range = 2
+  for (let i=Math.max(1,current-range); i<=Math.min(total,current+range); i++) pages.push({l:i,p:i})
+  if (current < total) pages.push({l:'›',p:current+1})
+  el.innerHTML = `<ul class="pagination pagination-sm">${pages.map(({l,p})=>`
+    <li class="page-item ${p===current?'active':''}">
+      <button class="page-link" onclick="(${cb.toString()})(${p})">${l}</button>
+    </li>`).join('')}</ul>`
+}
+
+// ── Scrapers ────────────────────────────────────────────────────────────────
+const _streams = {}
+
+async function loadScrapers() {
+  try {
+    const [status, stats] = await Promise.all([
+      api('/scrapers/status'),
+      api('/scrapers/stats')
+    ])
+    // Update service badges
+    for (const [svc, state] of Object.entries(status)) {
+      const el = document.getElementById('status-' + svc)
+      if (!el) continue
+      el.textContent = state
+      el.className = 'badge ' + (state === 'active' ? 'bg-success' : state === 'failed' ? 'bg-danger' : 'bg-warning text-dark')
+    }
+    // Update stats bar
+    document.getElementById('st-movies').textContent    = stats.movies.toLocaleString()
+    document.getElementById('st-series').textContent    = stats.series.toLocaleString()
+    document.getElementById('st-episodes').textContent  = stats.episodes.toLocaleString()
+    document.getElementById('st-servers').textContent   = stats.servers.toLocaleString()
+    document.getElementById('st-epservers').textContent = stats.ep_servers.toLocaleString()
+    document.getElementById('st-lastmovie').textContent = stats.last_movie || '—'
+    document.getElementById('st-lastserie').textContent = stats.last_serie  || '—'
+    // Load logs for all 3 services
+    for (const svc of ['flixlatam-scraper', 'flixlatam-series', 'poseidon-scraper', 'poseidon-series']) loadLogs(svc)
+  } catch(e) { toast(e.message, 'danger') }
+}
+
+async function loadLogs(svc) {
+  const el = document.getElementById('logs-' + svc)
+  el.innerHTML = '<span class="text-muted">Cargando...</span>'
+  try {
+    const data = await api('/scrapers/logs/' + svc)
+    renderLogs(svc, data.lines || [])
+  } catch(e) {
+    el.innerHTML = `<span class="text-danger">Error: ${esc(e.message)}</span>`
+  }
+}
+
+function colorLine(line) {
+  if (/error|exception|traceback|critical/i.test(line)) return 'color:#fc8181'
+  if (/warning|warn/i.test(line)) return 'color:#f6ad55'
+  if (/creada|creado|merged|agregad|nuevo|ok\b|done|completo|✓/i.test(line)) return 'color:#68d391'
+  if (/scraping|procesando|extrayendo|fetching|página/i.test(line)) return 'color:#63b3ed'
+  return 'color:#a0aec0'
+}
+
+function renderLogs(svc, lines) {
+  const el = document.getElementById('logs-' + svc)
+  if (!lines.length) { el.innerHTML = '<span class="text-muted">Sin logs disponibles</span>'; return }
+  el.innerHTML = lines.map(l => `<div style="${colorLine(l)}">${esc(l)}</div>`).join('')
+  el.scrollTop = el.scrollHeight
+}
+
+function appendLog(svc, line) {
+  const el = document.getElementById('logs-' + svc)
+  // Remove placeholder if present
+  if (el.children.length === 1 && el.children[0].tagName === 'SPAN') el.innerHTML = ''
+  const div = document.createElement('div')
+  div.style.cssText = colorLine(line)
+  div.textContent = line
+  el.appendChild(div)
+  while (el.children.length > 500) el.removeChild(el.firstChild)
+  el.scrollTop = el.scrollHeight
+}
+
+function toggleStream(svc) {
+  const btn = document.getElementById('btn-stream-' + svc)
+  if (_streams[svc]) {
+    _streams[svc].close()
+    delete _streams[svc]
+    btn.innerHTML = '<i class="bi bi-play-fill me-1"></i>En vivo'
+    btn.classList.remove('btn-danger')
+    btn.classList.add('btn-outline-info')
+    return
+  }
+  const el = document.getElementById('logs-' + svc)
+  el.innerHTML = '<span style="color:#63b3ed">Conectando al stream en vivo...</span>'
+  const es = new EventSource('/api/admin/scrapers/logs/' + svc + '/stream')
+  _streams[svc] = es
+  btn.innerHTML = '<i class="bi bi-stop-fill me-1"></i>Detener'
+  btn.classList.remove('btn-outline-info')
+  btn.classList.add('btn-danger')
+  es.onopen = () => { el.innerHTML = '' }
+  es.onmessage = e => appendLog(svc, e.data)
+  es.onerror = () => {
+    if (_streams[svc]) {
+      _streams[svc].close()
+      delete _streams[svc]
+      btn.innerHTML = '<i class="bi bi-play-fill me-1"></i>En vivo'
+      btn.classList.remove('btn-danger')
+      btn.classList.add('btn-outline-info')
+      appendLog(svc, '— stream desconectado —')
+    }
+  }
+}
+
+// ── Sync ──────────────────────────────────────────────────────────────────────
+async function syncFromCache() {
+  const btn = document.getElementById('btnSync')
+  btn.disabled = true
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Sincronizando...'
+  try {
+    const r = await api('/sync-from-cache', {method:'POST'})
+    toast(`Sincronizado: ${r.movies_synced.toLocaleString()} películas · ${r.series_synced.toLocaleString()} series`)
+    loadStats()
+    if (S.tab === 'movies') loadMovies(1)
+    else if (S.tab === 'series') loadSeries(1)
+  } catch(e) { toast(e.message, 'danger') }
+  btn.disabled = false
+  btn.innerHTML = '<i class="bi bi-database-fill-up me-1"></i>Sincronizar desde cache'
+}
+
+// ── Escape HTML ────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+}
+</script>
+</body>
+</html>
