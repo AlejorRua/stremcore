@@ -340,8 +340,17 @@ func findJSONEntry(entries []repoCatalogEntry, slug, title, releaseDate string) 
 		if normalizeTitle(entries[i].Titulo) != titleKey || titleKey == "" {
 			continue
 		}
-		if year != "" && yearOf(entries[i].ReleaseDate) == year {
-			return &entries[i]
+		entryYear := yearOf(entries[i].ReleaseDate)
+		if year != "" {
+			if entryYear == year {
+				return &entries[i]
+			}
+			// Un título igual de otro año es otra película o serie (por ejemplo,
+			// Supergirl 1984 y Supergirl 2026). Solo usamos el título como
+			// respaldo cuando el registro existente no tiene año.
+			if entryYear != "" {
+				continue
+			}
 		}
 		if titleMatch == nil {
 			titleMatch = &entries[i]

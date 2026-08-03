@@ -29,6 +29,28 @@ func TestMergeFlixLatestItemsDeduplicatesSlug(t *testing.T) {
 	}
 }
 
+func TestFindJSONEntryDoesNotMergeSameTitleFromDifferentYears(t *testing.T) {
+	entries := []repoCatalogEntry{
+		{ID: 1, Titulo: "Supergirl", Slug: "supergirl", ReleaseDate: "1984-07-01"},
+	}
+
+	got := findJSONEntry(entries, "supergirl-IzsusX", "Supergirl", "2026-01-01")
+	if got != nil {
+		t.Fatalf("expected a different-year title to be new, matched %#v", got)
+	}
+}
+
+func TestFindJSONEntryMatchesSameTitleAndYear(t *testing.T) {
+	entries := []repoCatalogEntry{
+		{ID: 1, Titulo: "Supergirl", Slug: "otro-slug", ReleaseDate: "2026-05-01"},
+	}
+
+	got := findJSONEntry(entries, "supergirl-IzsusX", "Supergirl", "2026-01-01")
+	if got == nil || got.ID != 1 {
+		t.Fatalf("expected same title and year to match, got %#v", got)
+	}
+}
+
 func TestMergeJSONMovieServersPreservesProviders(t *testing.T) {
 	existing := []Server{
 		{ID: 1, Nombre: "Proveedor A", URL: "https://example.com/a"},
