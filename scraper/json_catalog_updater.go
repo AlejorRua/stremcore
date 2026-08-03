@@ -45,6 +45,7 @@ type jsonUpdateConfig struct {
 	Root      string
 	StatePath string
 	HomeURL   string
+	YearURL   string
 	DryRun    bool
 	MaxItems  int
 	Workers   int
@@ -64,6 +65,12 @@ func runJSONCatalogUpdater(args []string) int {
 	flags.StringVar(&cfg.Root, "root", envString("FLIX_JSON_ROOT", root), "raiz del catalogo JSON")
 	flags.StringVar(&cfg.StatePath, "state", "", "archivo de estado")
 	flags.StringVar(&cfg.HomeURL, "url", envString("FLIX_HOME_URL", flixlatamBase+"/"), "home de FlixLatam")
+	flags.StringVar(
+		&cfg.YearURL,
+		"year-url",
+		envString("FLIX_YEAR_URL", fmt.Sprintf("%s/year/%d", flixlatamBase, time.Now().UTC().Year())),
+		"listado anual de FlixLatam; vacio lo desactiva",
+	)
 	flags.BoolVar(&cfg.DryRun, "dry-run", false, "solo detectar; no escribir archivos")
 	flags.IntVar(&cfg.MaxItems, "max-items", 0, "maximo de items por tipo; 0 procesa todos")
 	flags.IntVar(&cfg.Workers, "workers", 4, "descargas simultaneas de episodios")
@@ -153,8 +160,16 @@ func detectJSONCatalogChanges(cfg jsonUpdateConfig) (jsonPendingChanges, *jsonCa
 		return jsonPendingChanges{}, nil, flixMonitorState{}, err
 	}
 	snapshot := parseFlixLatamHomeLatest(home)
+	if strings.TrimSpace(cfg.YearURL) != "" {
+		yearSnapshot, yearErr := fetchFlixLatamYearSnapshot(cfg.YearURL)
+		if yearErr != nil {
+			return jsonPendingChanges{}, nil, flixMonitorState{}, yearErr
+		}
+		snapshot.Movies = mergeFlixLatestItems(snapshot.Movies, yearSnapshot.Movies)
+		snapshot.Series = mergeFlixLatestItems(snapshot.Series, yearSnapshot.Series)
+	}
 	if len(snapshot.Episodes)+len(snapshot.Movies)+len(snapshot.Series) == 0 {
-		return jsonPendingChanges{}, nil, flixMonitorState{}, errors.New("la home no contiene episodios, peliculas ni series reconocibles")
+		return jsonPendingChanges{}, nil, flixMonitorState{}, errors.New("las fuentes no contienen episodios, peliculas ni series reconocibles")
 	}
 	catalog, err := loadJSONCatalogIndex(cfg.Root)
 	if err != nil {
@@ -184,6 +199,61 @@ func detectJSONCatalogChanges(cfg jsonUpdateConfig) (jsonPendingChanges, *jsonCa
 		}
 	}
 	return changes, catalog, state, nil
+}
+
+func fetchFlixLatamYearSnapshot(yearURL string) (flixLatestSnapshot, error) {
+	firstPage, err := scrapeFlixLatam(yearURL)
+	if err != nil {
+		return flixLatestSnapshot{}, fmt.Errorf("descargando listado anual %s: %w", yearURL, err)
+	}
+	totalPages := parseFlixLatamTotalPages(firstPage)
+	if totalPages < 1 {
+		totalPages = 1
+	}
+
+	snapshot := flixLatestSnapshot{}
+	addPage := func(pageHTML string) {
+		snapshot.Movies = mergeFlixLatestItems(snapshot.Movies, parseFlixLatestMovies(pageHTML))
+		snapshot.Series = mergeFlixLatestItems(snapshot.Series, parseFlixLatestSeries(pageHTML))
+	}
+	addPage(firstPage)
+
+	separator := "?"
+	if strings.Contains(yearURL, "?") {
+		separator = "&"
+	}
+	for page := 2; page <= totalPages; page++ {
+		pageURL := fmt.Sprintf("%s%spage=%d", yearURL, separator, page)
+		pageHTML, pageErr := scrapeFlixLatam(pageURL)
+		if pageErr != nil {
+			return flixLatestSnapshot{}, fmt.Errorf("descargando pagina anual %d/%d: %w", page, totalPages, pageErr)
+		}
+		addPage(pageHTML)
+	}
+
+	log.Printf(
+		"[json-update] listado anual: paginas=%d peliculas=%d series=%d",
+		totalPages,
+		len(snapshot.Movies),
+		len(snapshot.Series),
+	)
+	return snapshot, nil
+}
+
+func mergeFlixLatestItems(current, incoming []flixLatestItem) []flixLatestItem {
+	seen := make(map[string]bool, len(current)+len(incoming))
+	for _, item := range current {
+		seen[strings.ToLower(strings.TrimSpace(item.Slug))] = true
+	}
+	for _, item := range incoming {
+		key := strings.ToLower(strings.TrimSpace(item.Slug))
+		if key == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		current = append(current, item)
+	}
+	return current
 }
 
 func appendUniqueJSONItem(items []flixLatestItem, candidate flixLatestItem) []flixLatestItem {

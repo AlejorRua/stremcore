@@ -13,6 +13,22 @@ func TestAppendUniqueJSONItemDeduplicatesTitleAndYear(t *testing.T) {
 	}
 }
 
+func TestMergeFlixLatestItemsDeduplicatesSlug(t *testing.T) {
+	current := []flixLatestItem{{Title: "Existente", Slug: "misma-pelicula"}}
+	incoming := []flixLatestItem{
+		{Title: "Existente repetida", Slug: "MISMA-PELICULA"},
+		{Title: "Nueva", Slug: "pelicula-nueva"},
+	}
+
+	merged := mergeFlixLatestItems(current, incoming)
+	if len(merged) != 2 {
+		t.Fatalf("expected 2 unique items, got %d", len(merged))
+	}
+	if merged[1].Slug != "pelicula-nueva" {
+		t.Fatalf("unexpected appended item: %#v", merged[1])
+	}
+}
+
 func TestMergeJSONMovieServersPreservesProviders(t *testing.T) {
 	existing := []Server{
 		{ID: 1, Nombre: "Proveedor A", URL: "https://example.com/a"},
