@@ -27,6 +27,7 @@ type repoCatalogEntry struct {
 	Overview    string   `json:"overview"`
 	Trailer     string   `json:"trailer"`
 	Slug        string   `json:"slug"`
+	AddedAt     string   `json:"added_at,omitempty"`
 }
 
 type repoMovieDetail struct {
@@ -50,6 +51,7 @@ type jsonUpdateConfig struct {
 	MaxItems  int
 	Workers   int
 	HTTPOnly  bool
+	AddedAt   string
 }
 
 type jsonPendingChanges struct {
@@ -57,6 +59,8 @@ type jsonPendingChanges struct {
 	Movies   []flixLatestItem
 	Series   []flixLatestItem
 }
+
+var errNoPlayableServers = errors.New("no se encontraron servidores reproducibles")
 
 func runJSONCatalogUpdater(args []string) int {
 	flags := flag.NewFlagSet("update-json", flag.ContinueOnError)
@@ -88,6 +92,7 @@ func runJSONCatalogUpdater(args []string) int {
 	if cfg.HTTPOnly {
 		cfg.DryRun = true
 	}
+	cfg.AddedAt = time.Now().UTC().Format(time.RFC3339)
 
 	changes, catalog, state, err := detectJSONCatalogChanges(cfg)
 	if err != nil {
@@ -144,7 +149,7 @@ func runJSONCatalogUpdater(args []string) int {
 		for _, failure := range failures {
 			log.Printf("[json-update] pendiente: %v", failure)
 		}
-		if successful == 0 {
+		if successful == 0 && !onlyUnavailableFailures(failures) {
 			return 1
 		}
 		log.Printf("[json-update] actualizacion parcial: exitosos=%d pendientes=%d", successful, len(failures))
@@ -152,6 +157,18 @@ func runJSONCatalogUpdater(args []string) int {
 	}
 	log.Printf("[json-update] catalogo JSON actualizado correctamente")
 	return 0
+}
+
+func onlyUnavailableFailures(failures []error) bool {
+	if len(failures) == 0 {
+		return false
+	}
+	for _, failure := range failures {
+		if !errors.Is(failure, errNoPlayableServers) {
+			return false
+		}
+	}
+	return true
 }
 
 func detectJSONCatalogChanges(cfg jsonUpdateConfig) (jsonPendingChanges, *jsonCatalogIndex, flixMonitorState, error) {
@@ -387,7 +404,7 @@ func updateJSONMovie(cfg jsonUpdateConfig, catalog *jsonCatalogIndex, item flixL
 	}
 	servers := fetchFlixLatamMovieServers(item.Slug)
 	if len(servers) == 0 {
-		return errors.New("no se encontraron servidores reproducibles")
+		return errNoPlayableServers
 	}
 	path := filepath.Join(cfg.Root, "movies", strconv.Itoa(post.ID)+".json")
 	var previous repoMovieDetail
@@ -398,7 +415,7 @@ func updateJSONMovie(cfg jsonUpdateConfig, catalog *jsonCatalogIndex, item flixL
 			Poster: post.Images.Poster, ReleaseDate: releaseDate(post.ReleaseDate),
 			Genres: jsonGenreSlugs(post.Genres), Rating: post.Rating,
 			Backdrop: post.Images.Backdrop, Overview: post.Overview,
-			Trailer: post.Trailer, Slug: item.Slug,
+			Trailer: post.Trailer, Slug: item.Slug, AddedAt: cfg.AddedAt,
 		},
 		Runtime: post.Runtime, Servidores: mergeJSONMovieServers(previous.Servidores, servers),
 	}
@@ -442,7 +459,7 @@ func updateJSONSeries(cfg jsonUpdateConfig, catalog *jsonCatalogIndex, item flix
 		Poster: post.Images.Poster, ReleaseDate: releaseDate(post.ReleaseDate),
 		Genres: jsonGenreSlugs(post.Genres), Rating: post.Rating,
 		Backdrop: post.Images.Backdrop, Overview: post.Overview,
-		Trailer: post.Trailer, Slug: item.Slug,
+		Trailer: post.Trailer, Slug: item.Slug, AddedAt: cfg.AddedAt,
 	}
 	mergeRepoEntryFields(&detail, previous)
 	if err := writeJSONAtomic(path, detail); err != nil {
@@ -477,7 +494,7 @@ func updateJSONEpisode(cfg jsonUpdateConfig, catalog *jsonCatalogIndex, item fli
 	}
 	servers := fetchFlixLatamEpisodeServers(item.Slug, item.Season, item.Episode)
 	if len(servers) == 0 {
-		return errors.New("no se encontraron servidores reproducibles")
+		return errNoPlayableServers
 	}
 	path := filepath.Join(cfg.Root, "series", strconv.Itoa(serie.ID), fmt.Sprintf("t%d.json", item.Season))
 	var season SeasonDetail
@@ -641,6 +658,9 @@ func mergeRepoEntryFields(detail *repoCatalogEntry, previous repoCatalogEntry) {
 	}
 	if detail.Slug == "" {
 		detail.Slug = previous.Slug
+	}
+	if previous.AddedAt != "" {
+		detail.AddedAt = previous.AddedAt
 	}
 }
 

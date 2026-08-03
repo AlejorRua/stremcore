@@ -72,7 +72,7 @@ def load_cards(name):
             continue
         if not isinstance(detail, dict) or detail.get("id") is None:
             continue
-        cards.append({
+        card = {
             "id": detail["id"],
             "titulo": detail.get("titulo", ""),
             "titulo_orig": detail.get("titulo_orig", ""),
@@ -80,8 +80,18 @@ def load_cards(name):
             "release_date": detail.get("release_date", ""),
             "genres": detail.get("genres") or [],
             "rating": detail.get("rating", ""),
-        })
-    cards.sort(key=lambda item: (item["release_date"], item["id"]), reverse=True)
+        }
+        if detail.get("added_at"):
+            card["added_at"] = detail["added_at"]
+        cards.append(card)
+    cards.sort(
+        key=lambda item: (
+            item.get("added_at", ""),
+            item["release_date"],
+            item["id"],
+        ),
+        reverse=True,
+    )
     return cards
 
 

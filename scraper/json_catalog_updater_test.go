@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 )
@@ -48,6 +49,26 @@ func TestFindJSONEntryMatchesSameTitleAndYear(t *testing.T) {
 	got := findJSONEntry(entries, "supergirl-IzsusX", "Supergirl", "2026-01-01")
 	if got == nil || got.ID != 1 {
 		t.Fatalf("expected same title and year to match, got %#v", got)
+	}
+}
+
+func TestMergeRepoEntryFieldsPreservesAddedAt(t *testing.T) {
+	detail := repoCatalogEntry{ID: 1, AddedAt: "2026-08-04T00:00:00Z"}
+	previous := repoCatalogEntry{ID: 1, AddedAt: "2026-08-03T17:12:26Z"}
+
+	mergeRepoEntryFields(&detail, previous)
+	if detail.AddedAt != previous.AddedAt {
+		t.Fatalf("expected original added_at %q, got %q", previous.AddedAt, detail.AddedAt)
+	}
+}
+
+func TestOnlyUnavailableFailures(t *testing.T) {
+	failures := []error{fmt.Errorf("pelicula pendiente: %w", errNoPlayableServers)}
+	if !onlyUnavailableFailures(failures) {
+		t.Fatal("expected unavailable-server failures to be retryable")
+	}
+	if onlyUnavailableFailures([]error{fmt.Errorf("network failure")}) {
+		t.Fatal("expected other failures to remain fatal")
 	}
 }
 
