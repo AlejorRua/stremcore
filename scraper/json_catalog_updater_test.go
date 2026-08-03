@@ -123,6 +123,44 @@ func TestEpisodeExistsReadsRepositorySeason(t *testing.T) {
 	}
 }
 
+func TestEpisodeRangeCompleteDetectsEarlierGaps(t *testing.T) {
+	root := t.TempDir()
+	seriesDir := filepath.Join(root, "series")
+	entry := repoCatalogEntry{ID: 42, Titulo: "Serie de prueba", Slug: "serie-prueba"}
+	if err := writeJSONAtomic(filepath.Join(seriesDir, "42.json"), entry); err != nil {
+		t.Fatal(err)
+	}
+	season := SeasonDetail{
+		SerieID: 42,
+		Number:  3,
+		Episodios: []EpisodeDetail{
+			{ID: 1, Number: 1, Servidores: []EpisodeServer{{ID: 1, URL: "https://example.com/1"}}},
+			{ID: 3, Number: 3, Servidores: []EpisodeServer{{ID: 1, URL: "https://example.com/3"}}},
+		},
+	}
+	if err := writeJSONAtomic(filepath.Join(seriesDir, "42", "t3.json"), season); err != nil {
+		t.Fatal(err)
+	}
+	index, err := loadJSONCatalogIndexWithEmptyMovies(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := flixLatestEpisode{Slug: "serie-prueba", Season: 3, Episode: 3}
+	if index.episodeRangeComplete(item) {
+		t.Fatal("expected missing episode 2 to make the range incomplete")
+	}
+
+	season.Episodios = append(season.Episodios, EpisodeDetail{
+		ID: 2, Number: 2, Servidores: []EpisodeServer{{ID: 1, URL: "https://example.com/2"}},
+	})
+	if err := writeJSONAtomic(filepath.Join(seriesDir, "42", "t3.json"), season); err != nil {
+		t.Fatal(err)
+	}
+	if !index.episodeRangeComplete(item) {
+		t.Fatal("expected episodes 1 through 3 to be complete")
+	}
+}
+
 func loadJSONCatalogIndexWithEmptyMovies(root string) (*jsonCatalogIndex, error) {
 	if err := writeJSONAtomic(filepath.Join(root, "movies", "placeholder.json"), repoCatalogEntry{}); err != nil {
 		return nil, err

@@ -209,7 +209,7 @@ func detectJSONCatalogChanges(cfg jsonUpdateConfig) (jsonPendingChanges, *jsonCa
 		}
 	}
 	for _, episode := range snapshot.Episodes {
-		if !catalog.episodeExists(episode) {
+		if !catalog.episodeRangeComplete(episode) {
 			changes.Episodes = append(changes.Episodes, episode)
 		} else if !cfg.DryRun {
 			state.ProcessedEpisodes[flixEpisodeKey(episode)] = true
@@ -397,6 +397,33 @@ func (c *jsonCatalogIndex) episodeExists(item flixLatestEpisode) bool {
 	return false
 }
 
+func (c *jsonCatalogIndex) episodeRangeComplete(item flixLatestEpisode) bool {
+	if item.Episode <= 0 {
+		return false
+	}
+	serie := c.findSeries(item.Slug, item.Title, "")
+	if serie == nil {
+		return false
+	}
+	var season SeasonDetail
+	path := filepath.Join(c.root, "series", strconv.Itoa(serie.ID), fmt.Sprintf("t%d.json", item.Season))
+	if readJSONFile(path, &season) != nil {
+		return false
+	}
+	playable := make(map[int]bool, len(season.Episodios))
+	for _, episode := range season.Episodios {
+		if episode.Number > 0 && len(episode.Servidores) > 0 {
+			playable[episode.Number] = true
+		}
+	}
+	for number := 1; number <= item.Episode; number++ {
+		if !playable[number] {
+			return false
+		}
+	}
+	return true
+}
+
 func updateJSONMovie(cfg jsonUpdateConfig, catalog *jsonCatalogIndex, item flixLatestItem) error {
 	post := flixPostFromItem(item, true)
 	if existing := catalog.findMovie(item); existing != nil {
@@ -474,7 +501,7 @@ func updateJSONSeries(cfg jsonUpdateConfig, catalog *jsonCatalogIndex, item flix
 }
 
 func updateJSONEpisode(cfg jsonUpdateConfig, catalog *jsonCatalogIndex, item flixLatestEpisode) error {
-	if catalog.episodeExists(item) {
+	if catalog.episodeRangeComplete(item) {
 		return nil
 	}
 	serie := catalog.findSeries(item.Slug, item.Title, "")
@@ -491,6 +518,14 @@ func updateJSONEpisode(cfg jsonUpdateConfig, catalog *jsonCatalogIndex, item fli
 		if serie == nil {
 			return errors.New("no se pudo identificar la serie")
 		}
+		if refreshed.episodeRangeComplete(item) {
+			return nil
+		}
+	}
+	if refreshed, refreshErr := refreshJSONSeason(cfg, *serie, item); refreshErr == nil && refreshed {
+		return nil
+	} else if refreshErr != nil {
+		log.Printf("[json-update] no se pudo refrescar temporada completa %s T%d: %v; intentando episodio individual", item.Slug, item.Season, refreshErr)
 	}
 	servers := fetchFlixLatamEpisodeServers(item.Slug, item.Season, item.Episode)
 	if len(servers) == 0 {
@@ -514,6 +549,37 @@ func updateJSONEpisode(cfg jsonUpdateConfig, catalog *jsonCatalogIndex, item fli
 	}
 	log.Printf("[json-update] episodio escrito: %s T%dE%d servidores=%d", item.Slug, item.Season, item.Episode, len(servers))
 	return nil
+}
+
+func refreshJSONSeason(cfg jsonUpdateConfig, serie repoCatalogEntry, item flixLatestEpisode) (bool, error) {
+	seasons, err := fetchFlixLatamSeasons(item.Slug)
+	if err != nil {
+		return false, err
+	}
+	for _, remoteSeason := range seasons {
+		if remoteSeason.Number != item.Season {
+			continue
+		}
+		fresh := fetchJSONSeason(serie.ID, item.Slug, remoteSeason, cfg.Workers)
+		if len(fresh.Episodios) == 0 {
+			return false, nil
+		}
+		path := filepath.Join(cfg.Root, "series", strconv.Itoa(serie.ID), fmt.Sprintf("t%d.json", item.Season))
+		var previous SeasonDetail
+		_ = readJSONFile(path, &previous)
+		merged := mergeJSONSeason(previous, fresh)
+		if err := writeJSONAtomic(path, merged); err != nil {
+			return false, err
+		}
+		log.Printf(
+			"[json-update] temporada actualizada: %s T%d episodios=%d",
+			item.Slug,
+			item.Season,
+			len(merged.Episodios),
+		)
+		return true, nil
+	}
+	return false, nil
 }
 
 func fetchJSONSeason(serieID int, slug string, season flixlatamSeasonInfo, workers int) SeasonDetail {
