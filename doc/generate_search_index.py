@@ -40,7 +40,7 @@ for name in ("movies", "series"):
     print(f"► Índice de búsqueda: {name}...")
     index = []
     for detail in load_details(name):
-        index.append({
+        entry = {
             "id": detail["id"],
             "t": detail.get("titulo", ""),
             "to": detail.get("titulo_orig", ""),
@@ -48,7 +48,12 @@ for name in ("movies", "series"):
             "d": detail.get("release_date", ""),
             "g": detail.get("genres") or [],
             "r": detail.get("rating", ""),
-        })
+        }
+        # Fecha en que el actualizador diario agrego el titulo (la app ordena "ultimas agregadas"
+        # con esto). Los titulos viejos no la tienen y quedan sin este campo, igual que antes.
+        if detail.get("added_at"):
+            entry["added_at"] = detail["added_at"]
+        index.append(entry)
 
     index.sort(key=lambda item: (item["t"] or "").casefold())
     total_chunks = max(1, -(-len(index) // CHUNK))
