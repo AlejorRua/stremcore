@@ -1,0 +1,66 @@
+name: Reparar o agregar titulo desde poseidonhd2
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "URL de la pelicula o serie en poseidonhd2.co (ej: https://www.poseidonhd2.co/serie/312017/a-knight-in-the-making)"
+        required: true
+      id:
+        description: "Id del catalogo a REPARAR (dejar vacio para dar de alta un titulo nuevo)"
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: poseidon-refresh
+  cancel-in-progress: false
+
+jobs:
+  poseidon-refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Configurar Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: scraper/go.mod
+          cache-dependency-path: scraper/go.sum
+
+      - name: Compilar
+        working-directory: scraper
+        run: go build -trimpath -o "$RUNNER_TEMP/poseidon-refresh" .
+
+      - name: Traer/reparar el titulo
+        run: |
+          if [ -n "${{ inputs.id }}" ]; then
+            "$RUNNER_TEMP/poseidon-refresh" poseidon-refresh --root "$GITHUB_WORKSPACE" --url "${{ inputs.url }}" --id "${{ inputs.id }}"
+          else
+            "$RUNNER_TEMP/poseidon-refresh" poseidon-refresh --root "$GITHUB_WORKSPACE" --url "${{ inputs.url }}"
+          fi
+
+      - name: Regenerar paginas, busqueda y metadatos
+        run: |
+          python3 doc/rebuild_catalog_indexes.py
+          python3 doc/generate_search_index.py
+
+      - name: Configurar autor de los commits
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Publicar cambios
+        run: |
+          git add -A -- movies series pages search meta.json
+          if git diff --cached --quiet; then
+            echo "No hay cambios para publicar (no se encontro nada nuevo en poseidonhd2)"
+            exit 0
+          fi
+          git commit -m "poseidon-refresh: ${{ inputs.url }}"
+          git push origin "HEAD:${{ github.event.repository.default_branch }}"
