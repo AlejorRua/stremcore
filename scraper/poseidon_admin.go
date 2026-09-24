@@ -98,6 +98,7 @@ func runPoseidonRefresh(args []string) int {
 	pageURL := fs.String("url", "", "URL de la ficha en poseidonhd2.co (pelicula o serie)")
 	idFlag := fs.Int("id", 0, "id del catalogo a reparar; si se omite, se usa el TMDbId de la URL como titulo nuevo")
 	dryRun := fs.Bool("dry-run", false, "no escribir nada, solo mostrar lo que se haria")
+	replace := fs.Bool("replace", false, "borrar los servidores viejos de este titulo y dejar SOLO los de poseidonhd2 (por defecto se suman, no se borra nada)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -133,9 +134,9 @@ func runPoseidonRefresh(args []string) int {
 	log.Printf("poseidon-refresh: %s (tmdb=%d slug=%s) -> %s%s", kindLabel, tmdbID, slug, action, dryRunSuffix(*dryRun))
 
 	if isSeries {
-		return runPoseidonRefreshSeries(*root, tmdbID, slug, catalogID, *dryRun)
+		return runPoseidonRefreshSeries(*root, tmdbID, slug, catalogID, *dryRun, *replace)
 	}
-	return runPoseidonRefreshMovie(*root, tmdbID, slug, catalogID, *dryRun)
+	return runPoseidonRefreshMovie(*root, tmdbID, slug, catalogID, *dryRun, *replace)
 }
 
 func dryRunSuffix(dryRun bool) string {
@@ -145,7 +146,7 @@ func dryRunSuffix(dryRun bool) string {
 	return ""
 }
 
-func runPoseidonRefreshMovie(root string, tmdbID int, slug string, catalogID int, dryRun bool) int {
+func runPoseidonRefreshMovie(root string, tmdbID int, slug string, catalogID int, dryRun bool, replace bool) int {
 	servers := fetchPHD2Servers(tmdbID, slug, false)
 	if len(servers) == 0 {
 		log.Println("poseidonhd2 no devolvio ningun servidor jugable para esta pelicula (revisa la url)")
@@ -162,7 +163,11 @@ func runPoseidonRefreshMovie(root string, tmdbID int, slug string, catalogID int
 	}
 	detail.ID = catalogID
 	before := len(previous.Servidores)
-	detail.Servidores = mergeJSONMovieServers(previous.Servidores, servers)
+	if replace {
+		detail.Servidores = mergeJSONMovieServers(nil, servers)
+	} else {
+		detail.Servidores = mergeJSONMovieServers(previous.Servidores, servers)
+	}
 
 	if !hadPrevious {
 		meta, err := fetchPHD2FullMeta(tmdbID, slug, false)
@@ -195,7 +200,7 @@ func runPoseidonRefreshMovie(root string, tmdbID int, slug string, catalogID int
 	return 0
 }
 
-func runPoseidonRefreshSeries(root string, tmdbID int, slug string, catalogID int, dryRun bool) int {
+func runPoseidonRefreshSeries(root string, tmdbID int, slug string, catalogID int, dryRun bool, replace bool) int {
 	seasons, err := fetchPHD2SerieSeasons(tmdbID, slug)
 	if err != nil || len(seasons) == 0 {
 		log.Printf("poseidonhd2 no devolvio temporadas para esta serie (revisa la url): %v", err)
@@ -265,7 +270,11 @@ func runPoseidonRefreshSeries(root string, tmdbID int, slug string, catalogID in
 			newSeason.Episodios = mergeJSONEpisode(newSeason.Episodios, fresh)
 			for i := range newSeason.Episodios {
 				if newSeason.Episodios[i].Number == ep.Number {
-					newSeason.Episodios[i].Servidores = mergeJSONEpisodeServers(newSeason.Episodios[i].Servidores, servers)
+					if replace {
+						newSeason.Episodios[i].Servidores = mergeJSONEpisodeServers(nil, servers)
+					} else {
+						newSeason.Episodios[i].Servidores = mergeJSONEpisodeServers(newSeason.Episodios[i].Servidores, servers)
+					}
 					if newSeason.Episodios[i].Imagen == "" {
 						newSeason.Episodios[i].Imagen = ep.Image
 					}
