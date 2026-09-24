@@ -9,6 +9,11 @@ on:
       id:
         description: "Id del catalogo a REPARAR (dejar vacio para dar de alta un titulo nuevo)"
         required: false
+      replace:
+        description: "Borrar los servidores viejos de este titulo (si no, se suman a los que ya tenia)"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -39,11 +44,14 @@ jobs:
 
       - name: Traer/reparar el titulo
         run: |
+          args=(poseidon-refresh --root "$GITHUB_WORKSPACE" --url "${{ inputs.url }}")
           if [ -n "${{ inputs.id }}" ]; then
-            "$RUNNER_TEMP/poseidon-refresh" poseidon-refresh --root "$GITHUB_WORKSPACE" --url "${{ inputs.url }}" --id "${{ inputs.id }}"
-          else
-            "$RUNNER_TEMP/poseidon-refresh" poseidon-refresh --root "$GITHUB_WORKSPACE" --url "${{ inputs.url }}"
+            args+=(--id "${{ inputs.id }}")
           fi
+          if [ "${{ inputs.replace }}" = "true" ]; then
+            args+=(--replace)
+          fi
+          "$RUNNER_TEMP/poseidon-refresh" "${args[@]}"
 
       - name: Regenerar paginas, busqueda y metadatos
         run: |
