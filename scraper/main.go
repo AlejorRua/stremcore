@@ -5288,6 +5288,10 @@ func main() {
 		os.Exit(runPoseidonRefresh(os.Args[2:]))
 	}
 
+	if len(os.Args) > 1 && os.Args[1] == "flixlatam-refresh" {
+		os.Exit(runFlixlatamRefresh(os.Args[2:]))
+	}
+
 	if len(os.Args) > 1 && os.Args[1] == "monitor-flixlatam" {
 		initPostgres()
 		if pgPool == nil {
