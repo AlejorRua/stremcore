@@ -1,0 +1,80 @@
+name: Reparar titulo puntual desde flixlatam (oficial)
+
+on:
+  workflow_dispatch:
+    inputs:
+      id:
+        description: "Id del catalogo (pelicula o serie) a reparar, tal como aparece en la app/panel"
+        required: true
+      season:
+        description: "Temporada (solo series; dejar vacio si es una pelicula)"
+        required: false
+      episode:
+        description: "Capitulo puntual dentro de la temporada (dejar vacio para traer toda la temporada)"
+        required: false
+      replace:
+        description: "Borrar los servidores viejos de este titulo/capitulo (si no, se suman a los que ya tenia)"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: flixlatam-refresh
+  cancel-in-progress: false
+
+jobs:
+  flixlatam-refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Configurar Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: scraper/go.mod
+          cache-dependency-path: scraper/go.sum
+
+      - name: Compilar
+        working-directory: scraper
+        run: go build -trimpath -o "$RUNNER_TEMP/flixlatam-refresh" .
+
+      - name: Reparar el titulo
+        run: |
+          args=(flixlatam-refresh --root "$GITHUB_WORKSPACE" --id "${{ inputs.id }}")
+          if [ -n "${{ inputs.season }}" ]; then
+            args+=(--season "${{ inputs.season }}")
+          fi
+          if [ -n "${{ inputs.episode }}" ]; then
+            args+=(--episode "${{ inputs.episode }}")
+          fi
+          if [ "${{ inputs.replace }}" = "true" ]; then
+            args+=(--replace)
+          fi
+          "$RUNNER_TEMP/flixlatam-refresh" "${args[@]}"
+
+      - name: Regenerar paginas, busqueda y metadatos
+        run: |
+          python3 doc/rebuild_catalog_indexes.py
+          python3 doc/generate_search_index.py
+
+      - name: Configurar autor de los commits
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Publicar cambios
+        run: |
+          git add -A -- movies series pages search meta.json
+          if git diff --cached --quiet; then
+            echo "No hay cambios para publicar (flixlatam no tenia nada nuevo)"
+            exit 0
+          fi
+          git commit -m "flixlatam-refresh: id ${{ inputs.id }}"
+          git push origin "HEAD:${{ github.event.repository.default_branch }}"
