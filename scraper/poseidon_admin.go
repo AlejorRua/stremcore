@@ -200,6 +200,9 @@ func runPoseidonRefreshMovie(root string, tmdbID int, slug string, catalogID int
 	return 0
 }
 
+// Cantidad maxima de episodios a probar despues del ultimo que lista poseidonhd2 en la pagina de la serie.
+const phd2ExtraEpisodeProbeLimit = 40
+
 func runPoseidonRefreshSeries(root string, tmdbID int, slug string, catalogID int, dryRun bool, replace bool) int {
 	seasons, err := fetchPHD2SerieSeasons(tmdbID, slug)
 	if err != nil || len(seasons) == 0 {
@@ -251,35 +254,54 @@ func runPoseidonRefreshSeries(root string, tmdbID int, slug string, catalogID in
 		}
 
 		anyEpisode := false
-		for _, ep := range season.Episodes {
-			servers := fetchPHD2EpisodeServers(tmdbID, slug, season.Number, ep.Number)
+		// addEpisode trae los servidores del episodio number y, si tiene, lo suma (o actualiza) en la temporada.
+		addEpisode := func(number int, epTitle, epImage string) bool {
+			servers := fetchPHD2EpisodeServers(tmdbID, slug, season.Number, number)
 			if len(servers) == 0 {
-				continue
+				return false
 			}
 			anyEpisode = true
-			title := ep.Title
+			title := epTitle
 			if title == "" {
-				title = fmt.Sprintf("Episodio %d", ep.Number)
+				title = fmt.Sprintf("Episodio %d", number)
 			}
 			fresh := EpisodeDetail{
-				ID:     catalogID*100000 + season.Number*1000 + ep.Number,
-				Number: ep.Number,
+				ID:     catalogID*100000 + season.Number*1000 + number,
+				Number: number,
 				Titulo: title,
-				Imagen: ep.Image,
+				Imagen: epImage,
 			}
 			newSeason.Episodios = mergeJSONEpisode(newSeason.Episodios, fresh)
 			for i := range newSeason.Episodios {
-				if newSeason.Episodios[i].Number == ep.Number {
+				if newSeason.Episodios[i].Number == number {
 					if replace {
 						newSeason.Episodios[i].Servidores = mergeJSONEpisodeServers(nil, servers)
 					} else {
 						newSeason.Episodios[i].Servidores = mergeJSONEpisodeServers(newSeason.Episodios[i].Servidores, servers)
 					}
 					if newSeason.Episodios[i].Imagen == "" {
-						newSeason.Episodios[i].Imagen = ep.Image
+						newSeason.Episodios[i].Imagen = epImage
 					}
 					break
 				}
+			}
+			return true
+		}
+		lastListed := 0
+		for _, ep := range season.Episodes {
+			addEpisode(ep.Number, ep.Title, ep.Image)
+			if ep.Number > lastListed {
+				lastListed = ep.Number
+			}
+		}
+		// poseidonhd2 a veces lista en la pagina de la serie menos episodios de los que ya tiene publicados (la lista va atrasada respecto de
+		// las paginas de cada episodio). Despues del ultimo episodio listado se prueban los siguientes, de a uno, y se corta cuando dos seguidos
+		// no tienen servidores (asi un fallo suelto de red no frena la busqueda de golpe).
+		for n, misses := lastListed+1, 0; n <= lastListed+phd2ExtraEpisodeProbeLimit && misses < 2; n++ {
+			if addEpisode(n, "", "") {
+				misses = 0
+			} else {
+				misses++
 			}
 		}
 		if !anyEpisode {
