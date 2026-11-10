@@ -139,6 +139,19 @@ func runJSONCatalogUpdater(args []string) int {
 		successful++
 	}
 
+	// Reintento: series recientes que quedaron en el catalogo SIN ninguna temporada (cuando se agregaron, flixlatam todavia no tenia
+	// servidores para sus episodios; antes nunca se volvian a revisar). No cuenta como falla si siguen sin servidores.
+	for _, entry := range catalog.seriesMissingSeasons(seriesRetryPerRun, seriesRetryWindow) {
+		playable, retryErr := retrySeriesSeasons(cfg, entry)
+		if retryErr != nil {
+			log.Printf("[json-update] reintento de temporadas %s (%d): %v", entry.Slug, entry.ID, retryErr)
+			continue
+		}
+		if playable > 0 {
+			log.Printf("[json-update] temporadas recuperadas: %s (%d) episodios=%d", entry.Slug, entry.ID, playable)
+			successful++
+		}
+	}
 	if successful > 0 {
 		state.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 		if err := writeJSONAtomic(cfg.StatePath, state); err != nil {
@@ -776,4 +789,72 @@ func writeJSONAtomic(path string, value any) error {
 		return err
 	}
 	return os.Rename(tmp, path)
+}
+
+// Cuantas series sin temporadas se reintentan por corrida y hasta que antiguedad (desde added_at) se siguen reintentando.
+const seriesRetryPerRun = 40
+const seriesRetryWindow = 30 * 24 * time.Hour
+
+// seriesMissingSeasons devuelve las series agregadas dentro de la ventana que no tienen NINGUN archivo de temporada
+// (series/<id>/t*.json), las mas nuevas primero.
+func (c *jsonCatalogIndex) seriesMissingSeasons(limit int, window time.Duration) []repoCatalogEntry {
+	cutoff := time.Now().UTC().Add(-window)
+	var missing []repoCatalogEntry
+	for _, entry := range c.series {
+		if entry.ID <= 0 || strings.TrimSpace(entry.Slug) == "" || entry.AddedAt == "" {
+			continue
+		}
+		added, err := time.Parse(time.RFC3339, entry.AddedAt)
+		if err != nil || added.Before(cutoff) {
+			continue
+		}
+		if hasSeasonFiles(filepath.Join(c.root, "series", strconv.Itoa(entry.ID))) {
+			continue
+		}
+		missing = append(missing, entry)
+	}
+	sort.Slice(missing, func(i, j int) bool { return missing[i].AddedAt > missing[j].AddedAt })
+	if limit > 0 && len(missing) > limit {
+		missing = missing[:limit]
+	}
+	return missing
+}
+
+func hasSeasonFiles(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if !entry.IsDir() && strings.HasPrefix(name, "t") && filepath.Ext(name) == ".json" {
+			return true
+		}
+	}
+	return false
+}
+
+// retrySeriesSeasons vuelve a pedir a flixlatam las temporadas de una serie ya existente y escribe solo las que ya tienen
+// episodios con servidores. No toca el archivo principal de la serie (titulo, poster, added_at...).
+func retrySeriesSeasons(cfg jsonUpdateConfig, entry repoCatalogEntry) (int, error) {
+	seasons, err := fetchFlixLatamSeasons(entry.Slug)
+	if err != nil {
+		return 0, err
+	}
+	playable := 0
+	for _, season := range seasons {
+		detail := fetchJSONSeason(entry.ID, entry.Slug, season, cfg.Workers)
+		if len(detail.Episodios) == 0 {
+			continue
+		}
+		path := filepath.Join(cfg.Root, "series", strconv.Itoa(entry.ID), fmt.Sprintf("t%d.json", season.Number))
+		var previous SeasonDetail
+		_ = readJSONFile(path, &previous)
+		detail = mergeJSONSeason(previous, detail)
+		if err := writeJSONAtomic(path, detail); err != nil {
+			return playable, err
+		}
+		playable += len(detail.Episodios)
+	}
+	return playable, nil
 }

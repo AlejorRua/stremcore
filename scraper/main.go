@@ -2791,14 +2791,7 @@ func parseFlixLatamSeasons(html string) []flixlatamSeasonInfo {
 		epHTML := extractBetween(part, `<ul class="episodios">`, `</ul>`)
 		var episodes []flixlatamEpisodeInfo
 		for _, ep := range strings.Split(epHTML, "<li>")[1:] {
-			numStr := ""
-			if i := strings.Index(ep, `/capitulo/`); i >= 0 {
-				s := ep[i+10:]
-				if j := strings.IndexAny(s, `"'/`); j >= 0 {
-					numStr = s[:j]
-				}
-			}
-			epNum, _ := strconv.Atoi(numStr)
+			epNum := episodeNumberFrom(ep)
 			if epNum <= 0 {
 				continue
 			}
@@ -3053,10 +3046,7 @@ func fetchFlixLatamEpisodeServers(slug string, season, episode int) []EpisodeSer
 	// Active player uses src=; inactive players use data-src= (lazy load).
 	var iframeSrcs []string
 	for _, part := range strings.Split(html, `class="pframe source-box`)[1:] {
-		src := extractBetween(part, `<iframe src="`, `"`)
-		if src == "" {
-			src = extractBetween(part, `<iframe data-src="`, `"`)
-		}
+		src := iframeSourceFrom(part)
 		if src != "" {
 			iframeSrcs = append(iframeSrcs, src)
 		}
@@ -3121,10 +3111,7 @@ func fetchFlixLatamMovieServers(slug string) []Server {
 
 	var iframeSrcs []string
 	for _, part := range strings.Split(html, `class="pframe source-box`)[1:] {
-		src := extractBetween(part, `<iframe src="`, `"`)
-		if src == "" {
-			src = extractBetween(part, `<iframe data-src="`, `"`)
-		}
+		src := iframeSourceFrom(part)
 		if src != "" {
 			iframeSrcs = append(iframeSrcs, src)
 		}
