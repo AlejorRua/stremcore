@@ -1,0 +1,55 @@
+name: Comprobar PelisJuanita con Chromium estandar
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Preparar navegador de prueba en el runner
+        run: |
+          python3 -m pip install --disable-pip-version-check playwright==1.65.2
+          python3 -m playwright install --with-deps chromium
+      - name: Consultar paginas publicas sin interaccion
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, re, sys
+          from playwright.sync_api import sync_playwright, TimeoutError as BrowserTimeout
+          routes = [('movies', '/movies/ultimas-agregadas/'), ('series', '/series/ultimas-agregadas/'), ('episodes', '/series/ultimos-episodios/')]
+          results = []
+          with sync_playwright() as playwright:
+              browser = playwright.chromium.launch()
+              context = browser.new_context()
+              for kind, path in routes:
+                  page = context.new_page()
+                  result = {'kind': kind, 'status': None, 'links': 0}
+                  try:
+                      response = page.goto('https://pelisjuanita.com' + path, wait_until='domcontentloaded', timeout=30000)
+                      result['status'] = response.status if response else None
+                      if result['status'] == 200:
+                          page.wait_for_timeout(3000)
+                      result['title'] = page.title()
+                      html = page.content()
+                      result['verification'] = bool(re.search(r'making sure you.re not a bot|just a moment|verify you are human|cf-chl-|/cdn-cgi/challenge-platform/', html, re.I))
+                      result['links'] = page.locator('a[href*="/ver-serie/"],a[href*="/ver-pelicula/"]').count()
+                      result['assessment'] = 'available_for_review' if result['status'] == 200 and result['links'] and not result['verification'] else 'not_ready_for_automatic_import'
+                  except Exception as error:
+                      result['assessment'] = 'navigation_failed'
+                      result['error'] = type(error).__name__
+                  finally:
+                      page.close()
+                  results.append(result)
+              context.close()
+              browser.close()
+          print(json.dumps({'catalog_modified': False, 'browser': 'standard Chromium, fresh context', 'results': results}, indent=2))
+          lines = ['## PelisJuanita con Chromium estandar', '', '| Tipo | HTTP | Titulos | Verificacion | Resultado |', '|---|---|---|---|---|']
+          for result in results:
+              lines.append(f"| {result['kind']} | {result['status']} | {result['links']} | {result.get('verification', 'unknown')} | {result['assessment']} |")
+          lines += ['', 'Solo lectura. No se pulsan confirmaciones, no se importan cookies del usuario y no se modifica el catalogo.']
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as output:
+              output.write('\n'.join(lines) + '\n')
+          sys.exit(0 if all(result['assessment'] == 'available_for_review' for result in results) else 1)
+          PY
