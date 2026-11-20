@@ -1,0 +1,109 @@
+name: Comprobar PelisJuanita sin cambiar catalogo
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Comprobar lectura automatica desde GitHub
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          #!/usr/bin/env python3
+          """Read-only source feasibility check. Never edits the catalog or uses browser cookies."""
+          import json
+          import os
+          import re
+          import sys
+          from html.parser import HTMLParser
+          from pathlib import Path
+          from urllib.error import HTTPError, URLError
+          from urllib.parse import urljoin, urlparse
+          from urllib.request import Request, urlopen
+          
+          BASE = "https://pelisjuanita.com"
+          ROUTES = (
+              ("movies", "/movies/ultimas-agregadas/"),
+              ("series", "/series/ultimas-agregadas/"),
+              ("episodes", "/series/ultimos-episodios/"),
+          )
+          
+          
+          class PageLinks(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.links = set()
+                  self.scripts = set()
+          
+              def handle_starttag(self, tag, attrs):
+                  attrs = dict(attrs)
+                  if tag == "a" and attrs.get("href"):
+                      url = urljoin(BASE, attrs["href"])
+                      if urlparse(url).netloc == urlparse(BASE).netloc:
+                          if re.search(r"/(?:movies|series)/ver-(?:pelicula|serie)/", url):
+                              self.links.add(url)
+                  if tag == "script" and attrs.get("src"):
+                      url = urljoin(BASE, attrs["src"])
+                      if urlparse(url).netloc == urlparse(BASE).netloc:
+                          self.scripts.add(url)
+          
+          
+          def inspect(kind, route):
+              request = Request(BASE + route, headers={
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+              })
+              result = {"kind": kind, "url": request.full_url, "status": None}
+              try:
+                  with urlopen(request, timeout=20) as response:
+                      if urlparse(response.url).netloc != urlparse(BASE).netloc:
+                          raise ValueError("Source redirected to another host; manual review required")
+                      result["status"] = response.status
+                      body = response.read(2 * 1024 * 1024 + 1)
+                      if len(body) > 2 * 1024 * 1024:
+                          raise ValueError("HTML exceeded diagnostic size limit")
+                      html = body.decode("utf-8", errors="replace")
+                      page = PageLinks()
+                      page.feed(html)
+                      challenge = bool(re.search(
+                          r"making sure you.re not a bot|just a moment|verify you are human|cf-chl-|/cdn-cgi/challenge-platform/",
+                          html, re.I,
+                      ))
+                      result.update(bytes=len(body), verification_page=challenge,
+                                    title_links=len(page.links), scripts=sorted(page.scripts),
+                                    samples=sorted(page.links)[:3])
+                      result["assessment"] = ("blocked_by_verification" if challenge else
+                                              "html_available_for_importer_development" if page.links else
+                                              "html_available_but_catalog_rendering_needs_review")
+              except HTTPError as error:
+                  result.update(status=error.code, assessment="http_error")
+              except (URLError, ValueError, TimeoutError, OSError) as error:
+                  result.update(assessment="request_failed", error=type(error).__name__)
+              return result
+          
+          
+          def main():
+              results = [inspect(kind, route) for kind, route in ROUTES]
+              report = {"purpose": "read-only source feasibility; not an importer",
+                        "catalog_modified": False, "results": results}
+              print(json.dumps(report, ensure_ascii=False, indent=2))
+              summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+              if summary_path:
+                  lines = ["## PelisJuanita: lectura automatica", "",
+                           "| Tipo | HTTP | Enlaces de titulos | Resultado |", "|---|---|---|---|"]
+                  for result in results:
+                      lines.append(f"| {result['kind']} | {result['status']} | {result.get('title_links', 0)} | {result['assessment']} |")
+                  lines.extend(["", "Esta comprobacion no cambia ni publica el catalogo.",
+                                "HTTP 200 no garantiza que los videos se reproduzcan ni que no pidan verificacion."])
+                  with Path(summary_path).open("a", encoding="utf-8") as output:
+                      output.write("\n".join(lines) + "\n")
+              return 0 if all(result.get("assessment") == "html_available_for_importer_development" for result in results) else 1
+          
+          
+          if __name__ == "__main__":
+              sys.exit(main())
+          
+          PY
