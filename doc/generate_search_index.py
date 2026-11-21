@@ -18,6 +18,24 @@ if OUT == os.path.abspath(os.sep):
     raise SystemExit("FLIX_MONITOR_EXPORT_ROOT no puede ser el directorio raiz")
 
 
+def series_has_playable_episode(series_id):
+    season_dir = os.path.join(OUT, "series", str(series_id))
+    if not os.path.isdir(season_dir):
+        return False
+    for entry in os.scandir(season_dir):
+        if not entry.is_file() or not entry.name.startswith("t") or not entry.name.endswith(".json"):
+            continue
+        try:
+            with open(entry.path, encoding="utf-8") as source:
+                season = json.load(source)
+        except (OSError, json.JSONDecodeError):
+            continue
+        for episode in (season.get("episodios") or []):
+            if episode.get("servidores"):
+                return True
+    return False
+
+
 def load_details(name):
     directory = os.path.join(OUT, name)
     details = []
@@ -31,8 +49,13 @@ def load_details(name):
                 detail = json.load(source)
         except (OSError, json.JSONDecodeError):
             continue
-        if isinstance(detail, dict) and detail.get("id") is not None:
-            details.append(detail)
+        if not (isinstance(detail, dict) and detail.get("id") is not None):
+            continue
+        # Mismo criterio que rebuild_catalog_indexes.py: una serie sin ningun episodio
+        # reproducible no entra al indice de busqueda (quedaria encontrable pero vacia).
+        if name == "series" and not series_has_playable_episode(detail["id"]):
+            continue
+        details.append(detail)
     return details
 
 
