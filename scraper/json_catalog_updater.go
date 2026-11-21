@@ -94,6 +94,10 @@ func runJSONCatalogUpdater(args []string) int {
 	}
 	cfg.AddedAt = time.Now().UTC().Format(time.RFC3339)
 
+	if newContentSourceIsPoseidon2() {
+		return runJSONCatalogUpdaterPoseidon2(cfg)
+	}
+
 	changes, catalog, state, err := detectJSONCatalogChanges(cfg)
 	if err != nil {
 		log.Printf("[json-update] deteccion fallo: %v", err)
@@ -375,9 +379,9 @@ func findJSONEntry(entries []repoCatalogEntry, slug, title, releaseDate string) 
 			if entryYear == year {
 				return &entries[i]
 			}
-			// Un tÃ­tulo igual de otro aÃ±o es otra pelÃ­cula o serie (por ejemplo,
-			// Supergirl 1984 y Supergirl 2026). Solo usamos el tÃ­tulo como
-			// respaldo cuando el registro existente no tiene aÃ±o.
+			// Un título igual de otro año es otra película o serie (por ejemplo,
+			// Supergirl 1984 y Supergirl 2026). Solo usamos el título como
+			// respaldo cuando el registro existente no tiene año.
 			if entryYear != "" {
 				continue
 			}
