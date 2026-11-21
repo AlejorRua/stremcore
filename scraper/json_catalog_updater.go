@@ -375,9 +375,9 @@ func findJSONEntry(entries []repoCatalogEntry, slug, title, releaseDate string) 
 			if entryYear == year {
 				return &entries[i]
 			}
-			// Un título igual de otro año es otra película o serie (por ejemplo,
-			// Supergirl 1984 y Supergirl 2026). Solo usamos el título como
-			// respaldo cuando el registro existente no tiene año.
+			// Un tÃ­tulo igual de otro aÃ±o es otra pelÃ­cula o serie (por ejemplo,
+			// Supergirl 1984 y Supergirl 2026). Solo usamos el tÃ­tulo como
+			// respaldo cuando el registro existente no tiene aÃ±o.
 			if entryYear != "" {
 				continue
 			}
@@ -477,19 +477,31 @@ func updateJSONSeries(cfg jsonUpdateConfig, catalog *jsonCatalogIndex, item flix
 		return err
 	}
 	playable := 0
+	hasAnyEpisodeEver := false
 	for _, season := range seasons {
+		path := filepath.Join(cfg.Root, "series", strconv.Itoa(post.ID), fmt.Sprintf("t%d.json", season.Number))
+		var previous SeasonDetail
+		_ = readJSONFile(path, &previous)
+		if len(previous.Episodios) > 0 {
+			hasAnyEpisodeEver = true
+		}
 		detail := fetchJSONSeason(post.ID, item.Slug, season, cfg.Workers)
 		if len(detail.Episodios) == 0 {
 			continue
 		}
-		path := filepath.Join(cfg.Root, "series", strconv.Itoa(post.ID), fmt.Sprintf("t%d.json", season.Number))
-		var previous SeasonDetail
-		_ = readJSONFile(path, &previous)
 		detail = mergeJSONSeason(previous, detail)
 		if err := writeJSONAtomic(path, detail); err != nil {
 			return err
 		}
 		playable += len(detail.Episodios)
+		hasAnyEpisodeEver = true
+	}
+	// Si esta serie nunca tuvo ni un episodio reproducible (ni en corridas anteriores ni ahora -
+	// tipicamente embed69 bloqueado con su pantalla anti-robots), no se publica la ficha: antes
+	// quedaba "pelada" en el catalogo para siempre hasta que alguien la arreglara a mano.
+	if !hasAnyEpisodeEver {
+		log.Printf("[json-update] serie sin ningun episodio reproducible, no se publica: %s", item.Slug)
+		return errNoPlayableServers
 	}
 	path := filepath.Join(cfg.Root, "series", strconv.Itoa(post.ID)+".json")
 	var previous repoCatalogEntry
@@ -506,7 +518,7 @@ func updateJSONSeries(cfg jsonUpdateConfig, catalog *jsonCatalogIndex, item flix
 		return err
 	}
 	if playable == 0 {
-		log.Printf("[json-update] serie escrita sin episodios disponibles todavia: %s", path)
+		log.Printf("[json-update] serie escrita, sin episodios nuevos en esta corrida (ya tenia antes): %s", path)
 	} else {
 		log.Printf("[json-update] serie escrita: %s episodios=%d", path, playable)
 	}
