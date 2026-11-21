@@ -57,6 +57,24 @@ def write_json(path, data):
     os.replace(temporary, path)
 
 
+def series_has_playable_episode(series_id):
+    season_dir = os.path.join(OUT, "series", str(series_id))
+    if not os.path.isdir(season_dir):
+        return False
+    for entry in os.scandir(season_dir):
+        if not entry.is_file() or not entry.name.startswith("t") or not entry.name.endswith(".json"):
+            continue
+        try:
+            with open(entry.path, encoding="utf-8") as source:
+                season = json.load(source)
+        except (OSError, json.JSONDecodeError):
+            continue
+        for episode in (season.get("episodios") or []):
+            if episode.get("servidores"):
+                return True
+    return False
+
+
 def load_cards(name):
     directory = os.path.join(OUT, name)
     cards = []
@@ -71,6 +89,10 @@ def load_cards(name):
         except (OSError, json.JSONDecodeError):
             continue
         if not isinstance(detail, dict) or detail.get("id") is None:
+            continue
+        # Una serie sin ningun episodio reproducible (embed69 bloqueado y sin otra fuente
+        # cargada) no se publica en las paginas: quedaria visible en el catalogo pero vacia.
+        if name == "series" and not series_has_playable_episode(detail["id"]):
             continue
         card = {
             "id": detail["id"],
