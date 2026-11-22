@@ -1059,6 +1059,7 @@ func isAllowedServerProvider(name, playerURL, finalURL string) bool {
 		"lulustream",
 		"vtube",
 		"uploadfox",
+		"vidara",
 		"up2box",
 		"mixdrop",
 		"uqload",
