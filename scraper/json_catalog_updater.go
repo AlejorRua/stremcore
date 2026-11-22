@@ -28,6 +28,7 @@ type repoCatalogEntry struct {
 	Trailer     string   `json:"trailer"`
 	Slug        string   `json:"slug"`
 	AddedAt     string   `json:"added_at,omitempty"`
+	Phd2TmdbId int      `json:"phd2_tmdb_id,omitempty"`
 }
 
 type repoMovieDetail struct {
