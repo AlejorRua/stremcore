@@ -197,7 +197,7 @@ func addPHD2Movie(cfg jsonUpdateConfig, tmdbID int, slug string) error {
 			Poster: meta.Images.Poster, ReleaseDate: releaseDate(meta.ReleaseDate),
 			Genres: phd2MetaGenreSlugs(meta), Rating: phd2RatingString(meta.Rate.Average),
 			Backdrop: meta.Images.Backdrop, Overview: meta.Overview,
-			Slug: slug, AddedAt: cfg.AddedAt,
+			Slug: slug, AddedAt: cfg.AddedAt, Phd2TmdbId: tmdbID,
 		},
 		Servidores: mergeJSONMovieServers(previous.Servidores, servers),
 	}
@@ -258,7 +258,7 @@ func addPHD2Series(cfg jsonUpdateConfig, tmdbID int, slug string) error {
 		Poster: meta.Images.Poster, ReleaseDate: releaseDate(meta.ReleaseDate),
 		Genres: phd2MetaGenreSlugs(meta), Rating: phd2RatingString(meta.Rate.Average),
 		Backdrop: meta.Images.Backdrop, Overview: meta.Overview,
-		Slug: slug, AddedAt: cfg.AddedAt,
+		Slug: slug, AddedAt: cfg.AddedAt, Phd2TmdbId: tmdbID,
 	}
 	mergeRepoEntryFields(&detail, previous)
 	if err := writeJSONAtomic(path, detail); err != nil {
