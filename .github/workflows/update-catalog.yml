@@ -20,6 +20,7 @@ jobs:
     env:
       FLIX_MONITOR_EXPORT_ROOT: ${{ github.workspace }}
       FLIX_MONITOR_GIT_BRANCH: ${{ github.event.repository.default_branch }}
+      FLIX_NEW_CONTENT_SOURCE: poseidon2
 
     steps:
       - name: Descargar repositorio
