@@ -162,6 +162,7 @@ func runPoseidonRefreshMovie(root string, tmdbID int, slug string, catalogID int
 		detail = previous
 	}
 	detail.ID = catalogID
+	detail.Phd2TmdbId = tmdbID
 	before := len(previous.Servidores)
 	if replace {
 		detail.Servidores = mergeJSONMovieServers(nil, servers)
@@ -219,6 +220,7 @@ func runPoseidonRefreshSeries(root string, tmdbID int, slug string, catalogID in
 		entry = previousEntry
 	}
 	entry.ID = catalogID
+	entry.Phd2TmdbId = tmdbID
 	if !hadPreviousEntry {
 		meta, err := fetchPHD2FullMeta(tmdbID, slug, true)
 		if err != nil || meta == nil {
